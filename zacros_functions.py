@@ -21,8 +21,53 @@ import time
 
 # In[ ]:
 
+def plot_cluster_size_distribution(sizes):
+  """
+  Plots the cluster size distribution given a list of cluster sizes.
+  
+  Parameters:
+  ----------
+  sizes : list or array-like
+      List of cluster sizes (number of sites in each cluster).
+  """   
 
-def lattice_plot(lattice_input_file, reps=None, show_axes = False, pause=-1, show=True, close=False, show_sites_ids=False, file_name=None):
+  sizes = np.array(sizes)
+  if sizes.size == 0:
+    print("No clusters found.")
+  else:
+    counts = np.bincount(sizes)          # index = cluster size
+    counts = counts[1:]               # ignore size=0 clusters
+    s = np.arange(1, len(counts)+1)
+
+    pmf = counts / counts.sum()
+    cdf = np.cumsum(pmf)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    # histogram (log-scale y helps if broad distribution)
+    axes[0].bar(s, counts, color='C0')
+    #axes[0].set_yscale('log')
+    axes[0].set_xlabel('Cluster size (sites)')
+    axes[0].set_ylabel('Number of clusters')
+    axes[0].set_title('Cluster size distribution')
+    axes[0].grid(True)
+
+    # PMF + CDF
+    axes[1].plot(s, pmf, marker='o', label='PMF')
+    axes[1].set_xlabel('Cluster size (sites)')
+    axes[1].set_ylabel('P(size)')
+    ax2 = axes[1].twinx()
+    ax2.plot(s, cdf, color='0.4', linestyle='--', label='CDF')
+    ax2.set_ylabel('Cumulative P')
+    axes[1].grid(True)
+    axes[1].legend(loc='upper left')
+    ax2.legend(loc='upper right')
+
+    plt.tight_layout()
+    print(f"n_clusters: {len(sizes)}, mean size: {sizes.mean():.2f}, median: {np.median(sizes):.2f}")
+    plt.show()
+
+def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, pause=-1, show=True, close=False, show_sites_ids=False, file_name=None):
     """
     Visualizes a lattice defined in a Zacros lattice input file.
     Parameters
@@ -31,6 +76,8 @@ def lattice_plot(lattice_input_file, reps=None, show_axes = False, pause=-1, sho
         Path to the Zacros lattice input file.
     reps : list or tuple, optional
         Number of repetitions of the unit cell in x and y directions. If None, it uses the values from the lattice input file.
+    idx : int, optional
+        If provided, visualizes the configuration at the specified index from history_output.txt.
     show_axes : bool, optional
         If True, shows the axes of the plot. Default is False.
     pause : float, optional
@@ -144,6 +191,8 @@ def lattice_plot(lattice_input_file, reps=None, show_axes = False, pause=-1, sho
 
     ax.plot(xvalues, yvalues, color='k', linestyle="dashed", linewidth=1, zorder=1)
 
+    if idx is not None:
+        confs = [confs[idx]]
     for ic,conf in enumerate(confs):
 
         ax.cla()
@@ -173,7 +222,8 @@ def lattice_plot(lattice_input_file, reps=None, show_axes = False, pause=-1, sho
 
         display(fig)                  # show current frame in notebook
         clear_output(wait=True)       # remove previous frame output
-        time.sleep(pause)               # delay between frames
+        if pause > 0:
+          time.sleep(pause)               # delay between frames
     #display(fig)                      # keep final frame visible    #plt.show()
 
         # if not show_axes: ax.set_axis_off()
@@ -282,6 +332,92 @@ def plot_numbered_cells(sites, num_cols, num_rows, rep_col, rep_row):
     ax.set_title(f"{rep_col*num_cols}x{rep_row*num_rows}")
     ax.axis('off')  # Remove coordinate axes
     plt.show()
+
+
+def get_xy(lattice_input_file, idx=0):
+    """
+    Produces cartesian coordinates of adsorbates from history_output.txt
+    Parameters
+    ----------
+    lattice_input_file : str or Path
+        Path to the Zacros lattice input file.
+    idx : int, optional : which configuration to extract (default is 0)
+    Returns
+    -------
+    coords : np.array
+        Array of cartesian coordinates of adsorbates in the specified configuration.
+    """
+
+    # Read lattice input file
+
+    try:
+        with open(lattice_input_file, 'r') as f:
+            content = [line for line in f.readlines() if (line.strip() and not line.startswith('#'))]
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Lattice input file '{lattice_input_file}' not found.")
+    finally:
+        content = [line.split('#')[0] for line in content]
+
+    for i,line in enumerate(content):
+            if 'cell_vectors' in line:
+                unit_cell = np.array([ [float(x) for x in content[i+1].split()],
+                              [float(x) for x in content[i+2].split()] ])
+            if 'repeat_cell' in line:
+                repeat_cell = np.array([ int(x) for x in line.split()[1:3] ])
+            if 'n_site_types' in line:
+                n_site_types = int(line.split()[1])
+            if 'n_cell_sites' in line:
+                n_cell_sites = int(line.split()[1])
+            if 'site_types' in line:
+                site_types_names = line.split()[1:]
+            if 'site_coordinates' in line:
+                site_coordinates = []
+                for j in range(n_cell_sites):
+                    site_coordinates.append([float(x) for x in content[i+1+j].split()[:2]])
+                site_uc_coordinates = np.array(site_coordinates) @ unit_cell
+
+
+    site_coordinates = []
+    site_types = []
+    for i in range(repeat_cell[0]):
+        for j in range(repeat_cell[1]):
+            shift = np.array([i,j]) @ unit_cell
+            for coords,st in zip(site_uc_coordinates , site_types_names):
+                site_types.append(st)
+                site_coordinates.append(coords + shift)
+                site_types.append(st)
+
+    # Read configurations from history_output.txt file
+
+    try:
+        with open(lattice_input_file.parent / 'history_output.txt', 'r') as f:
+            content = f.readlines()
+    except FileNotFoundError:
+        print(f" File '{lattice_input_file.parent / 'history_output.txt'}' not found.")
+    finally:
+
+        # Get the species list
+        species = content[1].split()[1:]
+        # Set number of sites
+        n_sites = repeat_cell[0] * repeat_cell[1] * n_cell_sites
+        conf = np.zeros(n_sites, dtype=int)
+        # Get site indices for the specified configuration
+        count = 0
+        for line in content:
+            if 'configuration' in line:
+                if count == idx: 
+                  for i in range(n_sites):
+                      conf[i] = int(content[7 + count*(n_sites+1) +i].split()[2])
+                  break
+                count += 1
+
+    # Cell vectors and adsorbate coordinates
+    v1 = repeat_cell[0] * unit_cell[0]
+    v2 = repeat_cell[1] * unit_cell[1]
+    ads_coords = [(x,y) for (x, y), st, spec in zip(site_coordinates, site_types, conf) if (spec > 0)]
+
+    return np.array(ads_coords), v1, v2
+
 
 
 # In[ ]:
