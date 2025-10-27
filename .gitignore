@@ -1,2 +1,6 @@
 /__pycache__
 /zacros_run*
+# GitHub Copilot
+.history/
+.vscode/copilot/
+.vscode/.ropeproject/
