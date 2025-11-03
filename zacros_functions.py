@@ -15,6 +15,175 @@ from pathlib import Path
 import pandas as pd
 from IPython.display import clear_output, display
 import time
+from scipy.spatial import cKDTree,ConvexHull
+
+# Cluster Size and Circularity Functions
+
+class UnionFind:
+    def __init__(self, n):
+        self.parent = np.arange(n)
+        self.rank = np.zeros(n, dtype=int)
+
+    def find(self, a):
+        p = self.parent
+        while p[a] != a:
+            p[a] = p[p[a]]
+            a = p[a]
+        return a
+
+    def union(self, a, b):
+        ra = self.find(a); rb = self.find(b)
+        if ra == rb:
+            return
+        if self.rank[ra] < self.rank[rb]:
+            self.parent[ra] = rb
+        else:
+            self.parent[rb] = ra
+            if self.rank[ra] == self.rank[rb]:
+                self.rank[ra] += 1
+
+def cluster_points_periodic(points, v1, v2, cutoff):
+    """
+    Cluster 2D points with periodic boundary conditions.
+
+    Parameters
+    ----------
+    points : (N,2) array_like
+        Cartesian coordinates of points (float).
+    v1, v2 : The box is spanned by v1 and v2.
+    cutoff : float
+        Distance cutoff for connectivity (e.g. 3rd NN distance).
+
+    Returns
+    -------
+    labels : (N,) int
+        Cluster label for each original point (0..nclusters-1).
+    clusters : list of ndarray
+        Indices of points in each cluster.
+    sizes : list of int 
+        Sizes of clusters (only if return_sizes True).
+    """
+    pts = np.asarray(points, dtype=float)
+    if pts.size == 0:
+      return np.array([], dtype=int), [], []
+
+    N = len(pts)
+    # Build augmented points = original points shifted by translations i*v1 + j*v2 with i,j in {-1,0,1}
+    shifts = [(i, j) for i in (-1, 0, 1) for j in (-1, 0, 1)]
+    aug_pts = np.zeros((N * len(shifts), 2), dtype=float)
+    orig_idx = np.zeros(N * len(shifts), dtype=int)
+
+    k = 0
+    for si, (i, j) in enumerate(shifts):
+        shift_vec = i * v1 + j * v2
+        aug_pts[k:k+N] = pts + shift_vec
+        orig_idx[k:k+N] = np.arange(N)
+        k += N
+
+    # KD-tree on augmented points
+    tree = cKDTree(aug_pts)
+    pairs = tree.query_pairs(cutoff, output_type='ndarray')  # array of shape (M,2)
+
+    uf = UnionFind(N)
+    for a, b in pairs:
+        ia = orig_idx[a]
+        ib = orig_idx[b]
+        if ia != ib:
+            uf.union(ia, ib)
+
+    # Extract roots and relabel to contiguous labels
+    roots = np.array([uf.find(i) for i in range(N)])
+    unique_roots, inv = np.unique(roots, return_inverse=True)
+    labels = inv
+    clusters = [np.nonzero(labels == k)[0] for k in range(len(unique_roots))]
+    sizes = [len(c) for c in clusters]
+
+    return labels, clusters, sizes
+
+def cluster_circularity_periodic(points, v1, v2, cutoff):
+    """
+    Cluster points with PBC and compute cluster area, perimeter and circularity.
+    Returns a dict with:
+      labels, clusters, sizes, areas, perimeters, circularities
+    Notes:
+      - Area/perimeter computed from convex hull of each cluster after unwrapping PBC.
+      - Circularity = 4*pi*area / perimeter^2 (0 if area==0 or perimeter==0).
+    """
+    pts = np.asarray(points, dtype=float)
+    labels, clusters, sizes = cluster_points_periodic(pts, v1, v2, cutoff)
+    if len(clusters) == 0:
+        return dict(labels=labels, clusters=clusters, sizes=sizes,
+                    areas=[], perimeters=[], circularities=[])
+    # Build matrix V so that p = V @ frac  (frac in R^2)
+    V = np.vstack([np.asarray(v1), np.asarray(v2)]).T  # shape (2,2)
+    invV = np.linalg.inv(V)
+    frac = (invV @ pts.T).T   # fractional coordinates (may be outside [0,1))
+    frac_mod = frac - np.floor(frac)  # map to [0,1)
+    areas = []
+    perimeters = []
+    circularities = []
+    for idxs in clusters:
+        n = len(idxs)
+        if n == 0:
+            areas.append(0.0); perimeters.append(0.0); circularities.append(0.0); continue
+        fi = frac_mod[idxs]  # shape (n,2)
+        # compute cluster mean and unwrap each point by nearest integer shift towards mean
+        mean_f = fi.mean(axis=0)
+        # compute integer shifts that bring each point close to mean
+        shifts = np.rint(mean_f - fi).astype(int)  # shape (n,2)
+        fi_unwrapped = fi + shifts
+        coords = (V @ fi_unwrapped.T).T  # unwrapped Cartesian coords
+        if n == 1:
+            areas.append(0.0); perimeters.append(0.0); circularities.append(0.0); continue
+        if n == 2:
+            d = np.linalg.norm(coords[0] - coords[1])
+            area = 0.0
+            perim = 2.0 * d
+            circ = 0.0
+            areas.append(area); perimeters.append(perim); circularities.append(circ); continue
+        # n >= 3: convex hull
+        try:
+            hull = ConvexHull(coords)
+            hull_pts = coords[hull.vertices]
+            # perimeter
+            diffs = np.diff(np.vstack([hull_pts, hull_pts[0]]), axis=0)
+            perim = np.sqrt((diffs**2).sum(axis=1)).sum()
+            area = hull.volume  # area for 2D
+        except Exception:
+            # fallback: compute convex hull by monotone chain if ConvexHull fails
+            # simple fallback: approximate area/perimeter from bounding box
+            xmin, ymin = coords.min(axis=0)
+            xmax, ymax = coords.max(axis=0)
+            area = (xmax - xmin) * (ymax - ymin)
+            perim = 2.0 * ((xmax - xmin) + (ymax - ymin))
+        circ = 4.0 * np.pi * area / (perim**2) if perim > 0 and area > 0 else 0.0
+        areas.append(float(area)); perimeters.append(float(perim)); circularities.append(float(circ))
+    return dict(labels=labels, clusters=clusters, sizes=sizes,
+                areas=areas, perimeters=perimeters, circularities=circularities)
+
+def plot_cluster_size_and_circularity(sizes, circularities, bins=None):
+    """
+    Quick plot helper: histogram of sizes and circularity distribution.
+    """
+    import matplotlib.pyplot as plt
+    sizes = np.asarray(sizes)
+    circularities = np.asarray(circularities)
+    if bins is None:
+        bins = np.arange(1, sizes.max()+2) if sizes.size>0 else 10
+    fig, ax = plt.subplots(1,2,figsize=(10,4))
+    if sizes.size>0:
+        ax[0].hist(sizes, bins=bins, color='C0', log=True)
+        ax[0].set_xlabel('Cluster size (sites)'); ax[0].set_ylabel('Number of clusters (log)')
+    else:
+        ax[0].text(0.5,0.5,'no clusters',ha='center',va='center')
+    if circularities.size>0:
+        ax[1].hist(circularities[circularities>0], bins=30, color='C1')
+        ax[1].set_xlabel('Circularity'); ax[1].set_ylabel('Counts')
+    else:
+        ax[1].text(0.5,0.5,'no circularities',ha='center',va='center')
+    plt.tight_layout()
+    plt.show()
+
 
 
 # ## Lattice plotting function
@@ -334,18 +503,18 @@ def plot_numbered_cells(sites, num_cols, num_rows, rep_col, rep_row):
     plt.show()
 
 
-def get_xy(lattice_input_file, idx=0):
+def get_xy(lattice_input_file, idx=None):
     """
     Produces cartesian coordinates of adsorbates from history_output.txt
     Parameters
     ----------
     lattice_input_file : str or Path
         Path to the Zacros lattice input file.
-    idx : int, optional : which configuration to extract (default is 0)
+    idx : int, optional : which configuration to extract (default is None, meaning all snapshots)
     Returns
     -------
     coords : np.array
-        Array of cartesian coordinates of adsorbates in the specified configuration.
+        (List of) Array(s) of cartesian coordinates of adsorbates in the specified configuration.
     """
 
     # Read lattice input file
@@ -400,23 +569,27 @@ def get_xy(lattice_input_file, idx=0):
         species = content[1].split()[1:]
         # Set number of sites
         n_sites = repeat_cell[0] * repeat_cell[1] * n_cell_sites
-        conf = np.zeros(n_sites, dtype=int)
-        # Get site indices for the specified configuration
-        count = 0
-        for line in content:
-            if 'configuration' in line:
-                if count == idx: 
-                  for i in range(n_sites):
-                      conf[i] = int(content[7 + count*(n_sites+1) +i].split()[2])
-                  break
-                count += 1
 
-    # Cell vectors and adsorbate coordinates
-    v1 = repeat_cell[0] * unit_cell[0]
-    v2 = repeat_cell[1] * unit_cell[1]
-    ads_coords = [(x,y) for (x, y), st, spec in zip(site_coordinates, site_types, conf) if (spec > 0)]
+        if idx is None:
+          # Get number of configurations
+          for line in content:
+              if 'configuration' in line:
+                  n_confs = int(line.split()[1])
+          confs = np.zeros((n_confs, n_sites), dtype=int)
+          for i_conf in range(n_confs):
+            for i in range(n_sites):
+              confs[i_conf, i] = int(content[7 + i_conf*(n_sites+1) +i].split()[2])
+        else:
+          confs = np.zeros((1, n_sites), dtype=int)
+          for i in range(n_sites):
+            confs[0, i] = int(content[7 + idx*(n_sites+1) +i].split()[2])
 
-    return np.array(ads_coords), v1, v2
+    # adsorbate coordinates
+    ads_coords = []
+    for conf in confs:
+      ads_coords.append(np.array([(x,y) for (x, y), st, spec in zip(site_coordinates, site_types, conf) if (spec > 0)]))
+
+    return ads_coords
 
 
 
