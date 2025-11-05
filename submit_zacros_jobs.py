@@ -1,57 +1,88 @@
 #! /usr/bin/env python-
 
+import sys
+import json
+import numpy as np
+import os
+# from itertools import chain
+from pathlib import Path
+import zacros_cluster_defs as cl
+
 #------------------------------------------------------------------------------
 #   Constants class 
 #------------------------------------------------------------------------------
-import sys
-import subprocess
-import json
-import numpy as np
-import time
-from itertools import chain
-import multiprocessing as mp
-from copy import copy, deepcopy
-
 class Constants( object ):
 	
     def __init__(self):
-        self.kb      = 8.6173324E-5     # Boltzmann constant in eV/K
-        self.pi      = np.pi
+      self.kb      = 8.6173324E-5     # Boltzmann constant in eV/K
+      self.pi      = np.pi
+
+      # Surface specific 
+      self.reduced_cell_vectors_pfcc111 = np.array(
+                              [ [1.0,          0.0], 
+                                [1/2, np.sqrt(3)/2] ] )
+
 
 #------------------------------------------------------------------------------
-#   Control File Class
+#   Zacros Input Files Class
 #------------------------------------------------------------------------------        
-class mmcControlFile( object ):
+class ZacrosInputFiles( object ):
  
     def __init__(self):
-        # file name components
-        self.file_name       = ""
-        self.file_name_base  = ""
-        self.file_name_type  = "" 
+        # input file names
+        self.simulation_input_file_name       = "simulation_input.dat"
+        self.lattice_input_file_name          = "lattice_input.dat"
+        self.state_input_file_name            = "state_input.dat"
+        self.mechanism_input_file_name        = "mechanism_input.dat"
+        self.energetics_input_file_name       = "energetics_input.dat"
+        self.path                             = Path(".")
+        self.wdir                             = self.path
+
+        self.run_type                         = ""
+        self.n_trajs                          = 1
+        self.first_traj                       = 1
+
+        self.header                           = ""
+        self.n_ads                            = [0]
+
+        # lattice input parameters
+        self.lattice_constant =  1.0   # in Angstroms
+        self.reduced_cell_vectors   = np.array([ [1.0, 0.0], [0.0, 1.0] ])
+        self.cell_vectors = self.lattice_constant*self.reduced_cell_vectors
+        self.repeat_cell = [1,1]   # number of unit cells in directions of lattice vectors
         
-        # control file parameters
-        self.algorithm       = ""	# MC algorithm to use (bkl or mmc)
-        self.nlat            = [0,0]	# size of 2D MC lattice (n_rows x n_cols)
-        self.step_period     = 0	# step_density = 1/step_period; 0 means no step
-        self.adsorbates      = []	# species on the lattice
-        self.coverage        = []	# initial partial coverages per lattice
-        self.temperature     = 0	# temperature in K
-        self.energy          = ""	# file name with binding and interaction
-        self.start_conf      = ""
-        self.mmc_nsteps      = 0	# number of MMC steps
-        self.mmc_save_period = 0	# period for output
-        self.mmc_conf_save   = "false"  # key for saving confs 
-        self.mmc_running_avgs_save = "false" # key for saving running averages 
-        self.mmc_hist_period = 0	# period for histogram  calculation
-        self.rdf             = [-1,0,0] # rdf calculation period, bin size and number of bins
-        self.gc_period       = 1        # period for gc-mmc (0 means no gc = canonical mmc)
-        self.gc_chempots     = [0]      # chemical potential in eV per species
-        self.show_progress   = "false"      # if to show progress
-            
+        # simulation input parameters
+        self.temperature    = 300.0    # in K
+        self.snapshots      = 1
+        self.max_steps      = 100
+        self.max_time       = None
+        self.wall_time      = 3600   # in seconds
+
+        # energetics input parameters
+        # 
+        # cluster_list :
+        #     List of integers indicating which clusters to include in the input file.
+        #     The integers correspond to:
+        #       0: single site cluster
+        #       1: 2-site cluster with 1st nearest neighbor
+        #       2: 3-site cluster with 2nd nearest neighbor
+        #       3: 3-site cluster with 3rd nearest neighbor
+        #       4: 4-site cluster with 4th nearest neighbor
+        #       5: 4-site cluster with 5th nearest neighbor
+        #       6: 5-site cluster with 6th nearest neighbor
+        #       7: 5-site cluster with 7th nearest neighbor
+        #       8: 5-site cluster with 8th nearest neighbor
+        #       9: 6-site cluster with 9th nearest neighbor
+        #      10: 3-site cluster with 3 adsorbates
+        # energy_list : List of corresponding energies.
+
+        self.cluster_list   = [0]
+        self.energy_list    = [0]
+
         self.run_number      = ""       # this is filled in by script
                 
     # -------------------------------------------------------------------------
-    #  write control file 
+    #  write zacros input files 
     # -------------------------------------------------------------------------
     def write(self, lFile):
         
@@ -62,56 +93,195 @@ class mmcControlFile( object ):
         # leaves the log file open so writing control file and log file are 
         # atomic in a multiprocessor environment. Logfile serves as lock
         
-        # ---------------------------------------------------------------------
-        # construct the file name
-        # ---------------------------------------------------------------------   
-        self.file_name = self.file_name_base + '-{:06d}'.format(self.run_number)
-        if self.file_name_type != "":
-            self.file_name += '-' + self.file_name_type
-        #self.file_name += '.control'
-        
-        # ---------------------------------------------------------------------
-        #  write the control file
-        # ---------------------------------------------------------------------
-        with open(self.file_name+'.control', 'w') as f:
-            f.write( '! {}\n'.format(self.file_name+'.control') )
-            f.write( 'algorithm       {}\n'.format(self.algorithm) )
-            f.write( 'nlat            {} {} \n'.format(self.nlat[0], self.nlat[1]) )
-            f.write( 'step_period     {}\n'.format(self.step_period) )
-            f.write( 'adsorbates      ' + ' '.join(self.adsorbates) + '\n' )
-            f.write( 'coverages       ' + ' '.join([str(cov) for cov in self.coverage]) +'\n')
-            f.write( 'temperature     {}\n'.format(self.temperature))
-            f.write( 'energy          {}\n'.format(self.energy))
-            
-            # if self.start_conf is defined and is non null, write start_conf line
-            try: 
-                if self.start_conf != "":
-                    f.write('start_conf      {}\n'.format(self.start_conf))
-            except:
-                pass   
-            
-            f.write( 'mmc_nsteps            {}\n'.format(self.mmc_nsteps))
-            f.write( 'mmc_save_period       {}\n'.format(self.mmc_save_period))
-            f.write( 'mmc_conf_save         {}\n'.format(self.mmc_conf_save))
-            f.write( 'mmc_running_avgs_save {}\n'.format(self.mmc_conf_save))
-            f.write( 'mmc_hist_period       {}\n'.format(self.mmc_hist_period))
+        self.wdir = self.path / f'{self.run_number}'
+        try:
+          self.wdir.mkdir(parents=True)
+        except FileExistsError:
+          print('Error: Directory ', self.wdir, ' already exists')
+          exit(1)
 
-            f.write( 'rdf             {} {} {} \n'.format(self.rdf[0], self.rdf[1], self.rdf[2]) )
-            f.write( 'gc_period       {}\n'.format(self.gc_period))
-            f.write( 'gc_chempots     ' + ' '.join([str(cp) for cp in self.gc_chempots]) +'\n')
+        # ---------------------------------------------------------------------
+        #  write the lattice input file
+        # ---------------------------------------------------------------------
 
-            f.write( 'show_progress         {}\n'.format(self.show_progress))
+        lattice_input_content = [
+          f"# {self.header}\n",
+          f"lattice periodic_cell\n",
+          f"\n",
+          f"cell_vectors       # in row format (Angstroms)\n",
+          f"\n",
+          f"   {self.cell_vectors[0,0]:14.10f}   {self.cell_vectors[0,1]:14.10f} \n",
+          f"   {self.cell_vectors[1,0]:14.10f}   {self.cell_vectors[1,1]:14.10f} \n",
+          f"\n",
+          f"repeat_cell       {self.repeat_cell[0]:.0f} {self.repeat_cell[1]:.0f}\n",
+          f"\n",
+          f"n_site_types      1\n",
+          f"site_type_names   fcc\n",
+          f"\n",
+          f"n_cell_sites      1\n",
+          f"site_types        fcc\n",
+          f"\n",
+          f"site_coordinates   # fractional coordinates (x,y) in row format\n",
+          f"\n",
+          f"   0.333333333333333   0.333333333333333\n",
+          f"\n",
+          f"neighboring_structure\n",
+          f"   \n",
+          f"   1-1  north\n",
+          f"   1-1  east\n",
+          f"   1-1  southeast\n",
+          f"\n",
+          f"end_neighboring_structure\n",
+          f"\n",
+          f"end_lattice\n",
+          ]
+
+        with open(self.wdir / self.lattice_input_file_name, 'w') as f:
+            for line in lattice_input_content: f.write(line)
+          
+        # ---------------------------------------------------------------------
+        #  write the simulation input file
+        # ---------------------------------------------------------------------
+
+        with open(self.wdir / self.simulation_input_file_name, "w") as f:
+          f.write(f"# {self.header}\n")
+          f.write(f"\n")
+          f.write(f"random_seed               314159265")
+          f.write(f"\n")
+          f.write(f"temperature               {float(self.temperature)}\n")
+          f.write(f"pressure                  1.00\n")
+          f.write(f"\n")
+          f.write(f"n_gas_species             0\n")
+          f.write(f"\n")
+          f.write(f"n_surf_species            1\n")
+          f.write(f"surf_specs_names          O*\n")
+          f.write(f"surf_specs_dent           1\n")
+          f.write(f"kmc_propagation_method first_reaction binary_heap\n")
+          f.write(f"\n")
+          f.write(f"override_array_bounds & & 100 145\n")
+          f.write(f"\n")
+          f.write(f"snapshots                 on event {self.snapshots}\n")
+          f.write(f"process_statistics        off #on realtime 2e-1\n")
+          f.write(f"species_numbers           off #on realtime 2e-1\n")
+          f.write(f"energetics_lists          off #on realtime 2e-1\n")
+          f.write(f"process_lists             off #on realtime 2e-1\n")
+          f.write(f"\n")
+          f.write(f"event_report              off\n")
+          f.write(f"on_sites_seeding_report   off\n")
+          f.write(f"\n")
+          f.write(f"max_steps                 {self.max_steps}\n")
+          if self.max_time is not None:
+            f.write(f"max_time                  {self.max_time}\n")
+          f.write(f"\n")
+          f.write(f"wall_time                 {self.wall_time:.0f} # in seconds\n")
+          f.write(f"\n")
+          f.write(f"no_restart\n")
+          f.write(f"\n")
+          f.write(f"# debug_report_processes\n")
+          f.write(f"# debug_report_global_energetics\n")
+          f.write(f"# debug_check_processes\n")
+          f.write(f"# debug_check_lattice\n")
+          f.write(f"\n")
+          f.write(f"finish\n")
+
+        # ---------------------------------------------------------------------
+        #  write the state input file
+        # ---------------------------------------------------------------------
+        state_input_content = [
             
+          f"# {self.header}\n",
+          f"\n",
+          f"initial_state\n",
+          f"\n",
+        ]
+
+        line =  [
+                  f"seed_multiple O* {self.n_ads[0]}\n",
+                  f"  site_types fcc\n",
+                  f"end_seed_multiple\n",
+                ]
+        state_input_content.extend(line)
+
+        state_input_content.append(f"\n")
+        state_input_content.append(f"end_initial_state\n")
+
+        with open(self.wdir / self.state_input_file_name, "w") as file:
+            for line in state_input_content: file.write(line)
+
+        # ---------------------------------------------------------------------
+        #  write mechanism input file
+        # ---------------------------------------------------------------------
+        mechanism_input_content = [
+          f"# {self.header}\n",
+          f"\n",
+          f"mechanism\n",
+          f"\n",
+          f"reversible_step O_hopping\n",
+          f"  sites 2\n",
+          f"  neighboring 1-2\n",
+          f"  initial # (entitynumber, species, dentate)\n",
+          f"    1 O*    1\n",
+          f"	  2 *     1\n",
+          f"  final\n",
+          f"    2 *     1\n",
+          f"	  1 O*    1\n",
+          f"  site_types fcc fcc\n",
+          f"  pre_expon   5.0e9\n",
+          f"  pe_ratio    1.0\n",
+          f"  activ_eng   0.43\n",
+          f"  prox_factor 0.5\n",
+          f"end_reversible_step\n",
+          f"\n",
+          f"end_mechanism\n",
+          f"\n"
+        ]
+
+        with open(self.wdir / self.mechanism_input_file_name, "w") as file:
+            file.writelines(mechanism_input_content)
+
+        # ---------------------------------------------------------------------
+        #  write energetics input file
+        # ---------------------------------------------------------------------
+
+        dispatcher = {0: cl.cluster_1_site,
+                      1: cl.cluster_2_site,
+                      2: cl.cluster_3_site_2nn,
+                      3: cl.cluster_3_site_3nn,
+                      4: cl.cluster_4_site_4nn,
+                      5: cl.cluster_4_site_5nn,
+                      6: cl.cluster_5_site_6nn,
+                      7: cl.cluster_5_site_7nn,
+                      8: cl.cluster_5_site_8nn,
+                      9: cl.cluster_6_site_9nn,
+                     10: cl.cluster_3_site_3
+                    }
+
+        with open(self.wdir / self.energetics_input_file_name, "w") as f:
+          f.write('# O at Pt(111)\n')
+          f.write('# For structures and values see Dropbox:\n')
+          f.write('# "Kinetics of Surface Reactions/zacros/O_Pt111/O_Pt111 structures.pptx"\n')
+          f.write('\n')
+          f.write('energetics\n')
+          f.write('\n')
+
+          for i, s in enumerate(self.cluster_list):
+            content = dispatcher[s]()
+            content.insert(-1, 
+              f"  cluster_eng   {self.energy_list[i]:.6f}\n")
+            [f.write(line) for line in content]
+            f.write('\n')
+
+          f.write('end_energetics\n')
+
         # ---------------------------------------------------------------------
         #  write the log file and close it
         # ---------------------------------------------------------------------    
-        logEntry = [self.run_number, self.file_name_type, self.nlat,   \
-                    self.step_period, self.adsorbates, self.coverage, \
-                    self.temperature, self.energy, self.mmc_nsteps,    \
-                    self.mmc_save_period, self.mmc_conf_save, \
-                    self.mmc_running_avgs_save, \
-                    self.mmc_hist_period, self.rdf, \
-                    self.gc_period, self.gc_chempots]    
+        logEntry = [
+                    self.run_number, 
+                    self.run_type,         
+                    self.n_ads,
+                    self.temperature
+                  ]    
         lFile.writeEntry( logEntry)
           
 
@@ -122,16 +292,15 @@ class logFile ( object):
     #    this opens the file if it exists, otherwise creates new file
     #    write a header if opening a new file
     #----------------------------------------------------------------------
-    def __init__(self, fnamebase):
-        self.fileName = fnamebase + '.log'
-        self.next_run = 1
-        header = 'run runType nLat nStep ads   cov    Temp     EnergyFile'\
-                  + '          Step   Save Confs Ravgs Hist RDF_info gc_period gc_chempots\n'
-        self.log = open(self.fileName, 'a+')
-        # if file is at the beginning, it is a new file so add header
-        if self.log.tell() == 0:
-            self.log.write(header)
-        self.log.close()
+    def __init__(self, fname):
+      self.fileName = fname
+      self.next_run = 1
+      header = 'run runType n_ads temperature\n'
+      self.log = open(self.fileName, 'a+')
+      # if file is at the beginning, it is a new file so add header
+      if self.log.tell() == 0:
+        self.log.write(header)
+      self.log.close()
     
     # -------------------------------------------------------------------------
     #  open log file, get the next run number, leave log file open
@@ -141,7 +310,6 @@ class logFile ( object):
     def getNextRunNumber(self):
         # note: this opens the log file and leaves it open
         # file is closed when log file entry is written
-
         self.log = open(self.fileName, 'a+' )
         self.log.seek(0)
         last_line = self.log.readlines()[-1]
@@ -162,8 +330,17 @@ class logFile ( object):
     #  close the log file
     # -------------------------------------------------------------------------
     def writeEntry(self, entry):
-        self.log.write(json.dumps(entry) + '\n' )
-        self.log.close()
+      # Convert any numpy integers to Python integers
+      json_entry = []
+      for item in entry:
+          if isinstance(item, np.integer):
+              item = int(item)  # Convert np.int64 to Python int
+          elif isinstance(item, list):
+              item = [int(x) if isinstance(x, np.integer) else x for x in item]
+          json_entry.append(item)
+
+      self.log.write(json.dumps(json_entry) + '\n' )
+      self.log.close()
         
         
 
@@ -172,8 +349,7 @@ class logFile ( object):
 # -----------------------------------------------------------------------------
 def get_platform():
     platforms={
-        'linux1' : 'Linux', 
-        'linux2' : 'Linux',
+        'linux' : 'Linux',
         'darwin' : 'OS X',
         'win32'  : 'Windows'
         }
@@ -182,23 +358,6 @@ def get_platform():
         return sys.platform
     else: 
         return platforms[sys.platform]
-
-        
-# -----------------------------------------------------------------------------
-#   function to do it
-# -----------------------------------------------------------------------------
-def worker(cFile):
-    
-
-    lock.acquire()
-
-    cFile.write(lFile)
-    print('running control file',  cFile.file_name)
-
-    lock.release()
-    subprocess.run(['./kmc_tian', cFile.file_name])
-
-    return cFile
           
         
 #------------------------------------------------------------------------------
@@ -208,43 +367,83 @@ def worker(cFile):
 if "__main__":
     const = Constants()
     print('platform =', get_platform())
-    cFile_ini =  mmcControlFile()
-    lock = mp.Lock()
+    infiles =  ZacrosInputFiles()
     
-    nprocs = 15
-    
-    temperatures = range(60, 201, 10)
-    coverages = [ [c/1000] for c in range(151, 180, 1) ]
+    temperatures = np.arange(100, 201, 100)
+    temperature = [70, 200]
+    coverages = np.arange(0.1, 0.3, 0.1)
+    coverages = [0.02, 0.05, 0.08, 0.1]
 
-    cFile_ini.nlat            = [36,36]
-    cFile_ini.step_period     = 0
-    cFile_ini.algorithm       = "mmc"
-    cFile_ini.adsorbates      = ["O"]
-    cFile_ini.coverage        = [0.01]
-    cFile_ini.energy          = "o-pt-fn1.energy"
-    cFile_ini.file_name_base  = "fn1"
-    cFile_ini.mmc_nsteps      = 1000000
-    cFile_ini.mmc_save_period = 1000
-    cFile_ini.mmc_hist_period = -1 
-    #cFile_ini.mmc_conf_save   = "true"
-    #cFile_ini.mmc_running_avgs_save = "true"
-    cFile_ini.rdf             = [-1,0.1,50]
-    cFile_ini.gc_period       = 0
-    #cFile_ini.show_progress   = "true"
-    
-    lFile = logFile(cFile_ini.file_name_base)
-	
-    cFiles = []
-    
-    for iT,T in enumerate(temperatures):
-        
-        cFiles.append( deepcopy(cFile_ini) )
-        cFiles[-1].temperature = T
-        cFiles[-1].coverage = coverages[0]
+    infiles.path = Path("./zacros_jobs")
+    Path(infiles.path).mkdir(parents=True, exist_ok=True)
 
-        for cov in coverages[1:]:
-            cFiles.append( deepcopy(cFiles[-1]) )
-            cFiles[-1].coverage = cov
+    infiles.lattice_constant =  2.821135   # in Angstroms
+    infiles.reduced_cell_vectors = const.reduced_cell_vectors_pfcc111
+    infiles.cell_vectors = infiles.lattice_constant*infiles.reduced_cell_vectors
 
-    mp.Pool(nprocs).map(worker, cFiles)
+    infiles.repeat_cell = [40,40]
+
+    infiles.run_type = ""
+    infiles.header   = "test"
+
+    # simulation input parameters
+    infiles.n_trajs        = 10
+    infiles.first_traj     = 1
+    infiles.snapshots      = 1000
+    infiles.max_steps      = 100000
+    infiles.wall_time      = 24*3600  # in seconds
     
+    lFile = logFile( infiles.path / "george.log" )
+
+    # Looping over conditions and submitting jobs
+    for T in temperatures:
+      for cov in coverages:
+
+        # get temperature and number of adsorbates
+        infiles.temperature = T
+        infiles.n_ads = [ int(cov*infiles.repeat_cell[0]*infiles.repeat_cell[1]) ]
+
+        # create run directory and write input files
+        infiles.write(lFile)
+
+        # write a script to submit jobs as SLURM array
+        with open(infiles.wdir / "job.sh", "w") as f:
+          f.write("#!/bin/bash\n")
+          f.write(f"#SBATCH -J zacros_{infiles.wdir.name}\n")
+          f.write(f"#SBATCH --array=1-{infiles.n_trajs}\n")
+          f.write(f"#SBATCH --partition=wodtke\n")
+          f.write(f"#SBATCH --time=4000:00:00\n")
+          f.write(f"#SBATCH --nodes=1\n") 
+          f.write(f"#SBATCH --ntasks=1\n")
+          f.write(f"# SBATCH --tmp=20G\n")
+          f.write(f"# SBATCH --mem=500M\n")
+          f.write(f"# SBATCH --mail-user\n")
+          f.write(f"# SBATCH --mail-type=END\n")
+          f.write(f"# SBATCH -o output\n")
+          f.write(f"\n")
+          f.write(f"# module purge\n")
+          f.write(f"module load shared slurm intel-oneapi compiler-rt ifort tbb mkl mpi\n")
+          f.write(f"\n")   
+          f.write(f"# export MKL_NUM_THREADS=1                # Use only 1 thread per program\n")
+          f.write(f"# export OMP_NUM_THREADS=1                # Use only 1 thread per program\n")
+
+          f.write(f"\n")
+          f.write(f"seed=$((314159265 + SLURM_ARRAY_TASK_ID))\n")
+          f.write("dir=traj_${SLURM_ARRAY_TASK_ID}\n")
+          f.write(f"mkdir -p $dir\n")
+          f.write('cp simulation_input.dat $dir/. \n')
+          f.write('cp lattice_input.dat $dir/. \n')
+          f.write('cp mechanism_input.dat $dir/. \n')
+          f.write('cp state_input.dat $dir/. \n')
+          f.write('cp energetics_input.dat $dir/. \n')
+          f.write('cd $dir \n')
+          f.write('sed -i "s/^random_seed.*/random_seed $seed/" "simulation_input.dat"\n')
+          f.write('srun /home/akandra/zacros/zacros_4.0/build/zacros.x > "zacros.out"' + '\n')
+
+        # Switch to the working directory
+        dir = os.getcwd()
+        os.chdir(infiles.wdir)
+        os.system(f'sbatch job.sh')
+        os.chdir(dir)
+
+    print('Done submitting jobs')
