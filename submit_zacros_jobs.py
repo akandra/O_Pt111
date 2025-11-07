@@ -22,6 +22,26 @@ class Constants( object ):
                               [ [1.0,          0.0], 
                                 [1/2, np.sqrt(3)/2] ] )
 
+      # Cluster catalog data
+      self.cluster_dispatch = { '0': cl.cluster_1_site,
+                      '1nn': cl.cluster_2_site,
+                      '2nn': cl.cluster_3_site_2nn,
+                      '3nn': cl.cluster_3_site_3nn,
+                      '4nn': cl.cluster_4_site_4nn,
+                      '5nn': cl.cluster_4_site_5nn,
+                      '6nn': cl.cluster_5_site_6nn,
+                      '7nn': cl.cluster_5_site_7nn,
+                      '8nn': cl.cluster_5_site_8nn,
+                      '9nn': cl.cluster_6_site_9nn,
+                    '3body': cl.cluster_3_site_3
+                    }
+
+      # 2-body clusters up to 9nn for Pt(111) from Florian's DFT calculations
+      self.cl_data_fn = {  '0':  0.0, '1nn':0.123, '2nn':0.029, '3nn':-0.010, '4nn':0.023, 
+                         '5nn':0.023, '6nn':0.015, '7nn':0.016, '8nn': 0.030, '9nn':0.014}
+
+      # 2-body clusters up to 3nn for Pt(111) from Hua's DFT calculations
+      self.cl_data_hua = {  '0':  0.0, '1nn':0.191, '2nn':0.034, '3nn':-0.021}
 
 #------------------------------------------------------------------------------
 #   Zacros Input Files Class
@@ -59,25 +79,8 @@ class ZacrosInputFiles( object ):
         self.wall_time      = 3600   # in seconds
 
         # energetics input parameters
-        # 
-        # cluster_list :
-        #     List of integers indicating which clusters to include in the input file.
-        #     The integers correspond to:
-        #       0: single site cluster
-        #       1: 2-site cluster with 1st nearest neighbor
-        #       2: 3-site cluster with 2nd nearest neighbor
-        #       3: 3-site cluster with 3rd nearest neighbor
-        #       4: 4-site cluster with 4th nearest neighbor
-        #       5: 4-site cluster with 5th nearest neighbor
-        #       6: 5-site cluster with 6th nearest neighbor
-        #       7: 5-site cluster with 7th nearest neighbor
-        #       8: 5-site cluster with 8th nearest neighbor
-        #       9: 6-site cluster with 9th nearest neighbor
-        #      10: 3-site cluster with 3 adsorbates
-        # energy_list : List of corresponding energies.
-
-        self.cluster_list   = [0]
-        self.energy_list    = [0]
+        self.cluster_list   = ['0'] # list of cluster types to include
+        self.energy_list    = [0.0] # corresponding cluster energies
 
         self.run_number      = ""       # this is filled in by script
                 
@@ -243,19 +246,6 @@ class ZacrosInputFiles( object ):
         #  write energetics input file
         # ---------------------------------------------------------------------
 
-        dispatcher = {0: cl.cluster_1_site,
-                      1: cl.cluster_2_site,
-                      2: cl.cluster_3_site_2nn,
-                      3: cl.cluster_3_site_3nn,
-                      4: cl.cluster_4_site_4nn,
-                      5: cl.cluster_4_site_5nn,
-                      6: cl.cluster_5_site_6nn,
-                      7: cl.cluster_5_site_7nn,
-                      8: cl.cluster_5_site_8nn,
-                      9: cl.cluster_6_site_9nn,
-                     10: cl.cluster_3_site_3
-                    }
-
         with open(self.wdir / self.energetics_input_file_name, "w") as f:
           f.write('# O at Pt(111)\n')
           f.write('# For structures and values see Dropbox:\n')
@@ -265,7 +255,7 @@ class ZacrosInputFiles( object ):
           f.write('\n')
 
           for i, s in enumerate(self.cluster_list):
-            content = dispatcher[s]()
+            content = const.cluster_dispatch[s]()
             content.insert(-1, 
               f"  cluster_eng   {self.energy_list[i]:.6f}\n")
             [f.write(line) for line in content]
@@ -279,8 +269,11 @@ class ZacrosInputFiles( object ):
         logEntry = [
                     self.run_number, 
                     self.run_type,         
+                    self.repeat_cell,
                     self.n_ads,
-                    self.temperature
+                    self.temperature,
+                    self.cluster_list,
+                    self.energy_list
                   ]    
         lFile.writeEntry( logEntry)
           
@@ -295,7 +288,7 @@ class logFile ( object):
     def __init__(self, fname):
       self.fileName = fname
       self.next_run = 1
-      header = 'run runType n_ads temperature\n'
+      header = 'run runType lat_size n_ads temperature clusters energies\n'
       self.log = open(self.fileName, 'a+')
       # if file is at the beginning, it is a new file so add header
       if self.log.tell() == 0:
@@ -369,10 +362,19 @@ if "__main__":
     print('platform =', get_platform())
     infiles =  ZacrosInputFiles()
     
+    # Define simulation conditions
     temperatures = np.arange(100, 201, 100)
     temperature = [70, 200]
+
     coverages = np.arange(0.1, 0.3, 0.1)
     coverages = [0.02, 0.05, 0.08, 0.1]
+
+    list_of_clusters = [['0'], # ideal lattice gas
+                        ['0', '1nn', '2nn'],
+                        ['0', '1nn', '2nn', '3nn'],
+                        ['0', '1nn', '2nn', '3nn', '4nn', '5nn'],
+                        ['0', '1nn', '2nn', '3nn', '4nn', '5nn', '6nn', '7nn', '8nn', '9nn']]
+    list_of_energies = [ [ const.cl_data_fn[s] for s in lst ] for lst in list_of_clusters ]
 
     infiles.path = Path("./zacros_jobs")
     Path(infiles.path).mkdir(parents=True, exist_ok=True)
@@ -393,57 +395,62 @@ if "__main__":
     infiles.max_steps      = 100000
     infiles.wall_time      = 24*3600  # in seconds
     
-    lFile = logFile( infiles.path / "george.log" )
+    lFile = logFile( infiles.path / "jobs.log" )
 
     # Looping over conditions and submitting jobs
-    for T in temperatures:
-      for cov in coverages:
+    for i, cluster_list in enumerate(list_of_clusters):
 
-        # get temperature and number of adsorbates
-        infiles.temperature = T
-        infiles.n_ads = [ int(cov*infiles.repeat_cell[0]*infiles.repeat_cell[1]) ]
+      infiles.cluster_list = cluster_list
+      infiles.energy_list  = list_of_energies[i]
 
-        # create run directory and write input files
-        infiles.write(lFile)
+      for T in temperatures:
+        for cov in coverages:
 
-        # write a script to submit jobs as SLURM array
-        with open(infiles.wdir / "job.sh", "w") as f:
-          f.write("#!/bin/bash\n")
-          f.write(f"#SBATCH -J zacros_{infiles.wdir.name}\n")
-          f.write(f"#SBATCH --array=1-{infiles.n_trajs}\n")
-          f.write(f"#SBATCH --partition=wodtke\n")
-          f.write(f"#SBATCH --time=4000:00:00\n")
-          f.write(f"#SBATCH --nodes=1\n") 
-          f.write(f"#SBATCH --ntasks=1\n")
-          f.write(f"# SBATCH --tmp=20G\n")
-          f.write(f"# SBATCH --mem=500M\n")
-          f.write(f"# SBATCH --mail-user\n")
-          f.write(f"# SBATCH --mail-type=END\n")
-          f.write(f"# SBATCH -o output\n")
-          f.write(f"\n")
-          f.write(f"# module purge\n")
-          f.write(f"module load shared slurm intel-oneapi compiler-rt ifort tbb mkl mpi\n")
-          f.write(f"\n")   
-          f.write(f"# export MKL_NUM_THREADS=1                # Use only 1 thread per program\n")
-          f.write(f"# export OMP_NUM_THREADS=1                # Use only 1 thread per program\n")
+          # get temperature and number of adsorbates
+          infiles.temperature = T
+          infiles.n_ads = [ int(cov*infiles.repeat_cell[0]*infiles.repeat_cell[1]) ]
 
-          f.write(f"\n")
-          f.write(f"seed=$((314159265 + SLURM_ARRAY_TASK_ID))\n")
-          f.write("dir=traj_${SLURM_ARRAY_TASK_ID}\n")
-          f.write(f"mkdir -p $dir\n")
-          f.write('cp simulation_input.dat $dir/. \n')
-          f.write('cp lattice_input.dat $dir/. \n')
-          f.write('cp mechanism_input.dat $dir/. \n')
-          f.write('cp state_input.dat $dir/. \n')
-          f.write('cp energetics_input.dat $dir/. \n')
-          f.write('cd $dir \n')
-          f.write('sed -i "s/^random_seed.*/random_seed $seed/" "simulation_input.dat"\n')
-          f.write('srun /home/akandra/zacros/zacros_4.0/build/zacros.x > "zacros.out"' + '\n')
+          # create run directory and write input files
+          infiles.write(lFile)
 
-        # Switch to the working directory
-        dir = os.getcwd()
-        os.chdir(infiles.wdir)
-        os.system(f'sbatch job.sh')
-        os.chdir(dir)
+          # write a script to submit jobs as SLURM array
+          with open(infiles.wdir / "job.sh", "w") as f:
+            f.write("#!/bin/bash\n")
+            f.write(f"#SBATCH -J zacros_{infiles.wdir.name}\n")
+            f.write(f"#SBATCH --array=1-{infiles.n_trajs}\n")
+            f.write(f"#SBATCH --partition=wodtke\n")
+            f.write(f"#SBATCH --time=4000:00:00\n")
+            f.write(f"#SBATCH --nodes=1\n") 
+            f.write(f"#SBATCH --ntasks=1\n")
+            f.write(f"# SBATCH --tmp=20G\n")
+            f.write(f"# SBATCH --mem=500M\n")
+            f.write(f"# SBATCH --mail-user\n")
+            f.write(f"# SBATCH --mail-type=END\n")
+            f.write(f"# SBATCH -o output\n")
+            f.write(f"\n")
+            f.write(f"# module purge\n")
+            f.write(f"module load shared slurm intel-oneapi compiler-rt ifort tbb mkl mpi\n")
+            f.write(f"\n")   
+            f.write(f"# export MKL_NUM_THREADS=1                # Use only 1 thread per program\n")
+            f.write(f"# export OMP_NUM_THREADS=1                # Use only 1 thread per program\n")
+
+            f.write(f"\n")
+            f.write(f"seed=$((314159265 + SLURM_ARRAY_TASK_ID))\n")
+            f.write("dir=traj_${SLURM_ARRAY_TASK_ID}\n")
+            f.write(f"mkdir -p $dir\n")
+            f.write('cp simulation_input.dat $dir/. \n')
+            f.write('cp lattice_input.dat $dir/. \n')
+            f.write('cp mechanism_input.dat $dir/. \n')
+            f.write('cp state_input.dat $dir/. \n')
+            f.write('cp energetics_input.dat $dir/. \n')
+            f.write('cd $dir \n')
+            f.write('sed -i "s/^random_seed.*/random_seed $seed/" "simulation_input.dat"\n')
+            f.write('srun /home/akandra/zacros/zacros_4.0/build/zacros.x > "zacros.out"' + '\n')
+
+          # Switch to the working directory
+          dir = os.getcwd()
+          os.chdir(infiles.wdir)
+          #os.system(f'sbatch job.sh')
+          os.chdir(dir)
 
     print('Done submitting jobs')
