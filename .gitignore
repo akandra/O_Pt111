@@ -1,5 +1,6 @@
 /__pycache__
-/zacros_*
+/zacros_run*/
+/zacros_jobs*/
 # GitHub Copilot
 .history/
 .vscode/copilot/
