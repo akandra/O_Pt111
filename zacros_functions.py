@@ -17,6 +17,87 @@ from IPython.display import clear_output, display
 import time
 from scipy.spatial import cKDTree,ConvexHull
 
+
+# RDF
+
+def rdf(confs, coverage, v1, v2, r_max=None, dr=0.1, g_ref=None, lattice_constant=None, ax=None, plot=False):
+   """
+   Compute 2D radial distribution function g(r) with periodic boundary conditions.
+
+   Parameters
+   ----------
+   confs : list of (N,2) array_like
+         Cartesian coordinates of points.
+   v1, v2 : array_like, shape (2,)
+         Box vectors spanning the periodic cell.
+   r_max : float or None
+         Maximum radius to compute g(r). If None use min(box lengths, box diagonal)/2.
+   dr : float
+         Bin width.
+
+   Returns
+   -------
+   dist : (M,) array
+         Bin midpoints.
+   g : (M,) array
+         Radial distribution function values.
+   """
+      
+   # choose r_max if not provided
+   if r_max is None:
+         l1 = np.linalg.norm(v1)
+         l2 = np.linalg.norm(v2)
+         l3 = np.linalg.norm(v1 + v2)
+         r_max = min(l1, l2, l3) / 2.0
+
+   cell_matrix = np.vstack([v1, v2]).T
+   cell_matrix_inv = np.linalg.inv(cell_matrix)
+
+   nbins = int(np.ceil(r_max / dr))
+   edges = np.linspace(0.0, r_max, nbins + 1)
+   g = np.zeros(nbins)
+   for conf in confs:  
+      counts = np.zeros(nbins, dtype=int)
+      for i1, r1 in enumerate(conf[:-1]):
+         for r2 in conf[i1+1:]:
+            r = r2 - r1
+            # apply PBC
+            frac_r = cell_matrix_inv @ r
+            r = cell_matrix @ (frac_r - np.rint(frac_r))
+            d = np.linalg.norm(r)
+            if (d>0) and (d<=r_max): counts[int(d/dr)] += 1
+      # Get 2D lattice ideal gas normalization factor 
+      if g_ref is not None: 
+         counts_n = np.zeros_like(counts, dtype=float)
+         np.divide(counts, g_ref, out=counts_n, where=g_ref!=0)
+         g = g + counts_n / len(conf) / coverage  # normalize by coverage
+      else:
+         g = g + counts / len(conf) / coverage  # normalize by coverage
+
+   dist = 0.5 * (edges[:-1] + edges[1:])
+
+   # Normalization by number of configurations 
+   # factor of 2 for unordered pairs
+   g = 2*g / len(confs)
+
+   # plotting
+   if plot:
+      if ax is None:
+            fig, ax = plt.subplots()
+      if lattice_constant is None:
+         ax.set_xlabel(r'$r (\mathrm{\AA})$')
+         lattice_constant = 1
+      else:
+         ax.set_xlabel(r'$r / a_0$')
+      ax.set_ylabel(r'g(r)')
+      ax.plot(dist/lattice_constant, g, marker='o',color='k')
+      #ax.set_ylim(bottom=0)
+      ax.grid(True)
+      if plot:
+            plt.show()
+      
+   return dist, g 
+
 # Cluster Size and Circularity Functions
 
 class UnionFind:
@@ -160,6 +241,40 @@ def cluster_circularity_periodic(points, v1, v2, cutoff):
         areas.append(float(area)); perimeters.append(float(perim)); circularities.append(float(circ))
     return dict(labels=labels, clusters=clusters, sizes=sizes,
                 areas=areas, perimeters=perimeters, circularities=circularities)
+
+def cluster_circularity_periodic_avg(confs, v1, v2, cutoff, nbins=20):
+    """
+    Compute cluster area, perimeter and circularity averaged over confs.
+
+    Returns a dict with:
+      labels, clusters, sizes, areas, perimeters, circularities
+      averaged over all configurations in confs.
+    Notes:
+      - Area/perimeter computed from convex hull of each cluster after unwrapping PBC.
+      - Circularity = 4*pi*area / perimeter^2 (0 if area==0 or perimeter==0).
+    """
+
+    sizes = []
+    circularities = []
+    for points in confs:
+      res = cluster_circularity_periodic(points, v1, v2, cutoff=cutoff)
+      sizes.extend(res['sizes'])
+      circularities.extend(res['circularities'])
+
+    sizes = np.asarray(sizes, dtype=int)
+    sizes_hist = np.zeros(sizes.max())
+    for s in sizes:
+        sizes_hist[s-1] += 1
+    sizes_hist /= len(confs)
+
+    edges = np.linspace(0, 1, nbins+1)
+    circ_hist = np.zeros(len(edges)-1)
+    bin_index = np.digitize(circularities, edges, right=False) - 1
+    for bin_idx in bin_index: circ_hist[bin_idx] += 1
+    circ_hist /= len(confs)
+    circ_bin_centers = 0.5 * (edges[:-1] + edges[1:])
+
+    return np.arange(1,sizes.max()), sizes_hist, circ_bin_centers, circ_hist
 
 def plot_cluster_size_and_circularity(sizes, circularities, bins=None):
     """

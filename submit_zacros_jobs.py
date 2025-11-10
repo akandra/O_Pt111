@@ -55,7 +55,7 @@ class ZacrosInputFiles( object ):
         self.state_input_file_name            = "state_input.dat"
         self.mechanism_input_file_name        = "mechanism_input.dat"
         self.energetics_input_file_name       = "energetics_input.dat"
-        self.path                             = Path(".")
+        self.path                             = Path("./zacros_jobs")
         self.wdir                             = self.path
 
         self.run_type                         = ""
@@ -376,7 +376,7 @@ if "__main__":
                         ['0', '1nn', '2nn', '3nn', '4nn', '5nn', '6nn', '7nn', '8nn', '9nn']]
     list_of_energies = [ [ const.cl_data_fn[s] for s in lst ] for lst in list_of_clusters ]
 
-    infiles.path = Path("./zacros_jobs")
+    infiles.path = Path("./zacros_calculations")
     Path(infiles.path).mkdir(parents=True, exist_ok=True)
 
     infiles.lattice_constant =  2.821135   # in Angstroms
