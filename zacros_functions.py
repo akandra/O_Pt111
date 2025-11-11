@@ -17,6 +17,11 @@ from IPython.display import clear_output, display
 import time
 from scipy.spatial import cKDTree,ConvexHull
 
+# Constants
+en_file_suffix  = 'energy.dat'
+rdf_file_suffix = 'rdf.dat'
+csd_file_suffix = 'csd.dat'
+ccd_file_suffix = 'ccd.dat'
 
 # RDF
 
@@ -299,7 +304,87 @@ def plot_cluster_size_and_circularity(sizes, circularities, bins=None):
     plt.tight_layout()
     plt.show()
 
+def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6)):
+   """
+   Plots rdf, energy vs. time, csd and ccd
+   """
+   def get_xy(fname):
+      try:
+         return np.loadtxt(fname, unpack=True)
+      except :
+         return None,None
 
+   # Get df rows satisfying the conditions
+   conditions =   (df['int'].str.contains(int)) & \
+                  (df['temperature'] == temperature) & \
+                  (df['cov'] == cov)
+   
+   if len(df[conditions])==0: 
+      return print('No data exist for the conditions specified')
+
+   # Get run data dir name
+   rundir = df[conditions].dir.iloc[0] 
+
+   fig, axes = plt.subplots(2,2,figsize=figsize)
+   fig.suptitle(fr'$T={temperature}$K, $\theta={cov}$ML, {df[conditions].int.iloc[0]}')
+
+   # RDF
+   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{rdf_file_suffix}'
+   x,y = get_xy(fname)
+
+   ax = axes[1,0]
+   if x is None: 
+      ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
+   else:
+      ax.plot(x, y, marker='o', color='k', linestyle='-', markersize=4)
+      ax.grid()
+   ax.set_xlabel(r'$r/a_0$')
+   ax.set_ylabel('Reduced $g(r)$')
+
+   # CSD
+   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{csd_file_suffix}'
+   x,y = get_xy(fname)
+
+   ax = axes[0,1]
+   if x is None: 
+      ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
+   else:
+      ax.plot(x, y, marker='o', color='k', linestyle='-', markersize=4)
+      ax.grid()
+   ax.set_xlabel(r'Cluster size')
+   ax.set_ylabel('Average counts')
+   
+   # Energy vs. time
+   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{en_file_suffix}'
+   x,y = get_xy(fname)
+
+   ax = axes[0,0]
+   if x is None: 
+      ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
+   else:
+      ax.plot(x, y, color='k', linestyle='-')
+      ax.axvline(x=fraction_eq*x[-1], color='r', linestyle='--', linewidth=2)
+      ax.grid()
+   ax.set_xlabel('Time (s)')
+   ax.set_ylabel('Energy (eV)')
+
+   # CCD
+   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{ccd_file_suffix}'
+   x,y = get_xy(fname)
+
+   ax = axes[1,1]
+   if x is None: 
+      ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
+   else:
+      ax.plot(x[1:], y[1:], marker='o', color='k', linestyle='-', markersize=4)
+      ax.grid()
+   ax.set_xlabel(r'Circularity')
+   ax.set_ylabel('Average counts')
+
+   fig.tight_layout()
+   plt.show()
+   
+   return rundir
 
 # ## Lattice plotting function
 
@@ -351,7 +436,7 @@ def plot_cluster_size_distribution(sizes):
     print(f"n_clusters: {len(sizes)}, mean size: {sizes.mean():.2f}, median: {np.median(sizes):.2f}")
     plt.show()
 
-def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, pause=-1, show=True, close=False, show_sites_ids=False, file_name=None):
+def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, pause=-1, show=True, close=False, show_sites_ids=False, file_name=None, figsize=(8,6)):
     """
     Visualizes a lattice defined in a Zacros lattice input file.
     Parameters
@@ -462,7 +547,7 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
         "gold", "turquoise", "lime", "indigo"]
 
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=figsize)
 
     x_len = abs(v2[0] - v1[0])
     ax.set_xlim([0.0 - 0.1 * x_len, v1[0] + v2[0] + 0.1 * x_len])
