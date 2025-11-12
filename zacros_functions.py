@@ -101,7 +101,7 @@ def rdf(confs, coverage, v1, v2, r_max=None, dr=0.1, g_ref=None, lattice_constan
       if plot:
             plt.show()
       
-   return dist, g 
+   return dist/lattice_constant, g 
 
 # Cluster Size and Circularity Functions
 
