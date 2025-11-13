@@ -22,6 +22,7 @@ en_file_suffix  = 'energy.dat'
 rdf_file_suffix = 'rdf.dat'
 csd_file_suffix = 'csd.dat'
 ccd_file_suffix = 'ccd.dat'
+acc_file_suffix = 'acc.dat'
 
 # RDF
 
@@ -104,6 +105,33 @@ def rdf(confs, coverage, v1, v2, r_max=None, dr=0.1, g_ref=None, lattice_constan
    return dist/lattice_constant, g 
 
 # Cluster Size and Circularity Functions
+
+class UnionFind_a:
+    def __init__(self, size):
+      
+        # Initialize the parent array with each element as its own representative
+        self.parent = list(range(size))
+    
+    def find(self, i):
+      
+        # If i itself is root or representative
+        if self.parent[i] == i:
+            return i
+          
+        # Else recursively find the representative of the parent
+        return self.find(self.parent[i])
+    
+    def union(self, i, j):
+      
+        # Representative of set containing i
+        irep = self.find(i)
+        
+        # Representative of set containing j
+        jrep = self.find(j)
+        
+        # Make the representative of i's set be the representative of j's set
+        self.parent[irep] = jrep
+
 
 class UnionFind:
     def __init__(self, n):
@@ -304,7 +332,7 @@ def plot_cluster_size_and_circularity(sizes, circularities, bins=None):
     plt.tight_layout()
     plt.show()
 
-def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6)):
+def plot_avgs(df, temperature=300, cov=0.01, ints='',fraction_eq=0.5,figsize=(8,6)):
    """
    Plots rdf, energy vs. time, csd and ccd
    """
@@ -312,10 +340,10 @@ def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6
       try:
          return np.loadtxt(fname, unpack=True)
       except :
-         return None,None
+         return None
 
    # Get df rows satisfying the conditions
-   conditions =   (df['int'].str.contains(int)) & \
+   conditions =   (df['int'] == ints) & \
                   (df['temperature'] == temperature) & \
                   (df['cov'] == cov)
    
@@ -325,7 +353,7 @@ def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6
    # Get run data dir name
    rundir = df[conditions].dir.iloc[0] 
 
-   fig, axes = plt.subplots(2,2,figsize=figsize)
+   fig, axes = plt.subplots(3,2,figsize=figsize)
    fig.suptitle(fr'$T={temperature}$K, $\theta={cov}$ML, {df[conditions].int.iloc[0]}')
 
    # RDF
@@ -343,7 +371,7 @@ def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6
 
    # CSD
    fname = rundir.parent.parent / 'results' / f'{rundir.name}_{csd_file_suffix}'
-   x,y = get_xy(fname)
+   x,y,z = get_xy(fname)
 
    ax = axes[0,1]
    if x is None: 
@@ -352,8 +380,18 @@ def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6
       ax.plot(x, y, marker='o', color='k', linestyle='-', markersize=4)
       ax.grid()
    ax.set_xlabel(r'Cluster size')
-   ax.set_ylabel('Average counts')
+   ax.set_ylabel('CSD average counts')
    
+   # ACC
+   ax = axes[1,1]
+   if x is None: 
+      ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
+   else:
+      ax.plot(x, z, marker='o', color='k', linestyle='-', markersize=4)
+      ax.grid()
+   ax.set_xlabel(r'Cluster size')
+   ax.set_ylabel('ACC average counts')
+
    # Energy vs. time
    fname = rundir.parent.parent / 'results' / f'{rundir.name}_{en_file_suffix}'
    x,y = get_xy(fname)
@@ -368,17 +406,17 @@ def plot_avgs(df, temperature=300, cov=0.01, int='',fraction_eq=0.5,figsize=(8,6
    ax.set_xlabel('Time (s)')
    ax.set_ylabel('Energy (eV)')
 
-   # CCD
-   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{ccd_file_suffix}'
+   # ACC histogram
+   fname = rundir.parent.parent / 'results' / f'{rundir.name}_{acc_file_suffix}'
    x,y = get_xy(fname)
 
-   ax = axes[1,1]
+   ax = axes[2,0]
    if x is None: 
       ax.text(0.5, 0.5, f"{fname.name} not found", ha='center', transform=ax.transAxes)
    else:
-      ax.plot(x[1:], y[1:], marker='o', color='k', linestyle='-', markersize=4)
+      ax.plot(x, y, marker='o', color='k', linestyle='-', markersize=4)
       ax.grid()
-   ax.set_xlabel(r'Circularity')
+   ax.set_xlabel(r'Accessibility')
    ax.set_ylabel('Average counts')
 
    fig.tight_layout()
