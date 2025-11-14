@@ -827,7 +827,7 @@ def get_xy(lattice_input_file, idx=None):
     for conf in confs:
       ads_coords.append(np.array([(x,y) for (x, y), st, spec in zip(site_coordinates, site_types, conf) if (spec > 0)]))
 
-    return ads_coords
+    return ads_coords, confs, repeat_cell[0], repeat_cell[1], n_cell_sites
 
 
 
