@@ -38,10 +38,10 @@ class Constants( object ):
 
       # 2-body clusters up to 9nn for Pt(111) from Florian's DFT calculations
       self.cl_data_fn_ce = {  '0':  0.0, '1nn':0.123, '2nn':0.029, '3nn':-0.010, '4nn':0.023, 
-                           '5nn':0.023, '6nn':0.015, '7nn':0.016, '8nn': 0.030, '9nn':0.014}
+                           '5nn':0.023, '6nn':0.015, '7nn':0.016, '8nn': 0.015, '9nn':0.007}
 
       self.cl_data_fn = {  '0':  0.0, '1nn':0.123, '2nn':0.029, '3nn':-0.010, '4nn':0.023, 
-                         '5nn':0.023, '6nn':0.015, '7nn':0.016, '8nn': 0.015, '9nn':0.007}
+                         '5nn':0.023, '6nn':0.015, '7nn':0.016, '8nn': 0.030, '9nn':0.014}
 
       # 2-body clusters up to 3nn for Pt(111) from Hua's DFT calculations
       self.cl_data_hua = {  '0':  0.0, '1nn':0.191, '2nn':0.034, '3nn':-0.021}
@@ -377,7 +377,7 @@ if "__main__":
                         ['0', '1nn', '2nn', '3nn'],
                         ['0', '1nn', '2nn', '3nn', '4nn', '5nn'],
                         ['0', '1nn', '2nn', '3nn', '4nn', '5nn', '6nn', '7nn', '8nn', '9nn']]
-    list_of_energies = [ [ const.cl_data_fn[s] for s in lst ] for lst in list_of_clusters ]
+    list_of_energies = [ [ const.cl_data_fn_ce[s] for s in lst ] for lst in list_of_clusters ]
 
     infiles.path = Path("./zacros_calculations")
     Path(infiles.path).mkdir(parents=True, exist_ok=True)
