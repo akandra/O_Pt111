@@ -909,7 +909,7 @@ def make_lattice_input(dir, Nrepx, Nrepy, simcell, Nrepx_lattice, Nrepy_lattice,
 
 def make_state_input(dir, adsorbates, random=True, header=""):
     """
-    Creates a state input file for Zarcos.
+    Creates a state input file for Zarcos either randomly or sequencionally positioned
 
     Parameters:
     ----------
@@ -958,6 +958,43 @@ def make_state_input(dir, adsorbates, random=True, header=""):
 
     return
 
+def make_state_input_loc(dir, adsorbates, header=""):
+    """
+    Creates a state input file for Zarcos from sites provided by adsorbates.
+
+    Parameters:
+    ----------
+    dir : Path
+        Directory path where the state_input.dat file will be created
+    adsorbates : list of tuples
+        List of (species, site) tuples where species is a string and site is an integer
+    header : str, optional
+        Header text to add at the top of the file (default: "")
+
+    Returns
+    -------
+    None
+        Writes state_input.dat file to the specified directory
+    """
+    state_input_content = [
+    f"# {header}\n",
+    f"\n",
+    f"initial_state\n",
+    f"\n",
+    ]
+    
+    for s in adsorbates:
+        line = f"seed_on_sites {s[0]} {s[1]:3.0f}\n"
+        state_input_content.append(line)
+
+    state_input_content.append(f"\n")
+    state_input_content.append(f"end_initial_state\n")
+    
+    with open(dir / "state_input.dat", "w") as file:
+        for line in state_input_content:
+            file.write(line)
+
+    return
 
 
 # In[ ]:
@@ -1214,7 +1251,7 @@ def get_cefit_output(wdir):
 # In[ ]:
 
 
-def produce_fit(wdir, dfz, Nrepx_target, Nrepy_target, shell_list, Eref, show=False):
+def produce_fit(wdir, dfz, Nrepx_target, Nrepy_target, shell_list, Eref, zacros_path, show=False):
     #
     # Produce energetics and calculation input files
     #
@@ -1265,7 +1302,7 @@ def produce_fit(wdir, dfz, Nrepx_target, Nrepy_target, shell_list, Eref, show=Fa
 
         # Write the Zacros input files for ce_fit
         make_lattice_input(conf_dir, Nrepx, Nrepy, sini.cell, Nrepx_target, Nrepy_target, header=f"{Nrepx_target}x{Nrepy_target} Pt(111)")
-        make_state_input(conf_dir, ads_pos)
+        make_state_input_loc(conf_dir, ads_pos)
         make_energy(conf_dir, E_form[-1])
 
         # Print the configuration directory name
