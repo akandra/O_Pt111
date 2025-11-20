@@ -704,6 +704,147 @@ def replicate_structure(sites, sizex, sizey, Nrepx, Nrepy):
 
 
 # In[ ]:
+# functions to be moved to zacros_functions.py
+def plot_state_ce(ce_dir, reps=None, show_axes = False, show_sites_ids=False, file_name=None, titles=None, figsize=(8,6), ncols=3, sf=1):
+   """
+   Visualizes a lattice defined in a Zacros lattice input file.
+   Parameters
+   ----------
+   ce_dir : str or Path
+      Path to the Zacros folder where ce fit was done
+   reps : list or tuple, optional
+      Number of repetitions of the unit cell in x and y directions. If None, it uses the values from the lattice input file.
+   idx : int, optional
+      If provided, visualizes the configuration at the specified index from history_output.txt.
+   show_axes : bool, optional
+      If True, shows the axes of the plot. Default is False.
+   pause : float, optional
+      Time in seconds to pause after showing the figure. Default is -1, which means it will wait indefinitely.
+   show : bool, optional
+      If True, shows the figure on the screen. Default is True.
+   close : bool, optional
+      If True, closes the figure window after pause time. Default is False.
+   show_sites_ids : bool, optional
+      If True, shows the binding sites id on the figure. Default is False.
+   file_name : str, optional
+      If provided, saves the figure to the specified file name. Default is None.
+   Returns
+   -------
+   None
+   """
+
+   # Collect the configuration folders properly ordered
+   confdirs = [ ce_dir / f'Conf{idx}' for idx in sorted([int(d.name[4:]) for d in ce_dir.glob('Conf*') if d.is_dir()])]
+   nconfs = len(confdirs)
+
+   # # Read site coordinates and cell vectors for all lattices
+   site_coordinates, cell_vecs_1, cell_vecs_2 = [], [], []
+   for c in confdirs:
+      try:
+         content = np.loadtxt(c.parent / (c.name + '_lattice_output.txt'), usecols=(1,2))
+      except:
+         print(f"Lattice output file for {c.name} not found.")
+      else:
+         site_coordinates.append(content[2:])
+         cell_vecs_1.append(content[0])
+         cell_vecs_2.append(content[1])
+
+   # Read lattice states
+   try:
+      lattice_states = [np.loadtxt(c.parent / (c.name + '_lattice_state.txt'), dtype=int) for c in confdirs]
+   except:
+      print(f"Not all of lattice state files were found.")
+
+   # Read calculation input
+   names_of_species = None
+   names_of_sites = None
+   nspecies = 0
+   nstypes = 0
+   try:
+      with open(ce_dir / 'calculation_input.dat') as f:
+         for line in f:
+            if 'n_surf_species'   in line: nspecies = int(line.split()[1])
+            if 'surf_specs_names' in line: names_of_species = line.split()[1:]
+            if 'n_site_types'     in line: nstypes = int(line.split()[1])
+            if 'site_type_names'  in line: names_of_sites = line.split()[1:]
+
+   except:
+      print(f"File calculation_input.dat not found.")
+
+
+   markers =   ["o", "s", "v", "D", "p", "^", "+", "x", "*", "P", "H", "X", "d", "h", ",", ".", "<", ">", "1", "2"]
+   colors = ["lightgray", "r", "g", "b", "m", "c", "k",
+      "tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple",
+      "tab:brown", "tab:pink", "tab:gray", "tab:olive", "tab:cyan",
+      "gold", "turquoise", "lime", "indigo"]
+
+
+   fig, axes = plt.subplots(int(np.ceil(nconfs/ncols)), ncols, figsize=figsize)
+
+   for i in range(nconfs):
+
+      ax = axes[i//ncols, i%ncols]
+
+      v1 = cell_vecs_1[i]
+      v2 = cell_vecs_2[i]
+
+      xvalues = [0.0, v1[0], v1[0] + v2[0], v2[0], 0.0]
+      yvalues = [0.0, v1[1], v1[1] + v2[1], v2[1], 0.0]
+
+      x_len = abs(v2[0] - v1[0])
+      ax.set_xlim([0.0 - 0.1 * x_len, v1[0] + v2[0] + 0.1 * x_len])
+      y_len = abs(v2[1] - v1[1])
+      ax.set_ylim([0.0 - 0.1 * y_len, v1[1] + v2[1] + 0.1 * y_len])
+      ax.set_aspect(1.0)
+
+      ax.set_xlabel(r'x ($\AA$)')
+      ax.set_ylabel(r'y ($\AA$)')
+
+      # ax.plot(xvalues, yvalues, color='k', linestyle="dashed", linewidth=1, zorder=1)
+
+      lattice_state = [ site[0] for site in lattice_states[i]]
+      occupancies   = [ site[1] for site in lattice_states[i]]
+      site_types =    [ site[2] for site in lattice_states[i]]
+      nsites = len(lattice_state)
+
+      for i_st, st in enumerate(names_of_sites):
+         for occ in sorted(np.unique(occupancies)):
+               
+            xvalues = [x for (x, y), s, spec in zip(site_coordinates[i], site_types, occupancies) if (s == i_st+1 and spec == occ)]
+            yvalues = [y for (x, y), s, spec in zip(site_coordinates[i], site_types, occupancies) if (s == i_st+1 and spec == occ)]
+
+            ax.scatter(
+               xvalues,
+               yvalues,
+               color=colors[occ],
+               marker=markers[i_st],
+               s=sf*440 / np.sqrt(nsites),
+               zorder=2,
+               label=st if occ == 0 else names_of_species[occ - 1]
+            )
+            
+            if show_sites_ids:
+               for j, (x, y) in enumerate(site_coordinates[i]):
+                  plt.annotate(str(j), (x, y), ha="center", va="center",
+                        fontsize=14 / nsites**0.25, 
+                        zorder=100)
+                  
+            if titles is None: 
+              ax.set_title(confdirs[i].name)
+            else:
+              if i < len(titles): ax.set_title(titles[i])
+
+   if not show_axes: 
+      for ax in axes.flatten():
+         ax.set_axis_off()
+
+   # axes[0.0].legend(loc="center left", bbox_to_anchor=(1, 0.5))
+
+   plt.tight_layout()
+
+      # if file_name is not None:
+      #     plt.savefig(file_name)
+
 
 
 def plot_numbered_cells(sites, num_cols, num_rows, rep_col, rep_row):
