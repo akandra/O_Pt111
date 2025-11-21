@@ -627,7 +627,7 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         plt.tight_layout()
 
-        display(fig)                  # show current frame in notebook
+        # display(fig)                  # show current frame in notebook
         clear_output(wait=True)       # remove previous frame output
         if pause > 0:
           time.sleep(pause)               # delay between frames
@@ -647,6 +647,7 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
 
         #         if close:
         #             plt.close("all")
+
 
 
 # ## Data and input files related functions
