@@ -578,7 +578,7 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
     xvalues = [0.0, v1[0], v1[0] + v2[0], v2[0], 0.0]
     yvalues = [0.0, v1[1], v1[1] + v2[1], v2[1], 0.0]
 
-    markers =   ["v", "s", "o", "D", "p", "^", "+", "x", "*", "P", "H", "X", "d", "h", ",", ".", "<", ">", "1", "2"]
+    markers =   ["o", "s", "v", "D", "p", "^", "+", "x", "*", "P", "H", "X", "d", "h", ",", ".", "<", ">", "1", "2"]
     colors = ["lightgray", "r", "g", "b", "m", "c", "k",
         "tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple",
         "tab:brown", "tab:pink", "tab:gray", "tab:olive", "tab:cyan",
@@ -627,11 +627,11 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         plt.tight_layout()
 
-        # display(fig)                  # show current frame in notebook
+        display(fig)                  # show current frame in notebook
         clear_output(wait=True)       # remove previous frame output
         if pause > 0:
           time.sleep(pause)               # delay between frames
-    #display(fig)                      # keep final frame visible    #plt.show()
+    display(fig)                      # keep final frame visible    #plt.show()
 
         # if not show_axes: ax.set_axis_off()
 
@@ -704,8 +704,6 @@ def replicate_structure(sites, sizex, sizey, Nrepx, Nrepy):
     return rep_sites
 
 
-# In[ ]:
-# functions to be moved to zacros_functions.py
 def plot_state_ce(ce_dir, reps=None, show_axes = False, show_sites_ids=False, file_name=None, titles=None, figsize=(8,6), ncols=3, sf=1):
    """
    Visualizes a lattice defined in a Zacros lattice input file.
