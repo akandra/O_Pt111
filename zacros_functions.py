@@ -631,7 +631,7 @@ def lattice_plot(lattice_input_file, reps=None, idx = None, show_axes = False, p
         clear_output(wait=True)       # remove previous frame output
         if pause > 0:
           time.sleep(pause)               # delay between frames
-    display(fig)                      # keep final frame visible    #plt.show()
+    #display(fig)                      # keep final frame visible    #plt.show()
 
         # if not show_axes: ax.set_axis_off()
 
