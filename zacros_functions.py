@@ -1324,7 +1324,7 @@ def get_dft_data(dft_dir):
 # In[ ]:
 
 
-def get_cefit_output(wdir):
+def get_cefit_output(wdir, plot=False, figsize=(12,6)):
     """
     Loads and parses the cefit_output.txt file.
 
@@ -1344,6 +1344,13 @@ def get_cefit_output(wdir):
         cl_names = lines[0].strip().split()
         cl_energies = [float(line.split()[0]) for line in lines[1:]]
         cl_multiplicity = [int(line.split()[1]) for line in lines[1:]]
+
+        if plot:
+          fig, ax = plt.subplots(figsize=figsize)
+          ax.scatter(cl_names, cl_energies, color='black')
+          ax.set_xlabel(r'Cluster in CE function')
+          ax.set_ylabel(r'ECI (eV)')
+          ax.grid()
 
         return cl_names, cl_energies, cl_multiplicity
 
@@ -1723,6 +1730,60 @@ def cluster_3_site_3():
 # In[ ]:
 
 
+def make_energetics_input_new(dir, cluster_list, eng_list=None):
+    """
+    Creates an energetics input file for Zacros containing cluster definitions.
+
+    Parameters
+    ----------
+    dir : Path
+        Directory where to write the energetics_input.dat file
+    cluster_list : list
+        List of integers indicating which clusters to include in the input file.
+    eng_list : list, optional
+        List of floats indicating the cluster energies corresponding to the clusters in shell_list.
+        If None, no energies are included in the input file (default: None)
+
+    Returns
+    -------
+    None
+
+    """
+
+      # Cluster catalog data
+    dispatcher = { '0': cl.cluster_1_site,
+               '1nn': cl.cluster_2_site,
+               '2nn': cl.cluster_3_site_2nn,
+               '3nn': cl.cluster_3_site_3nn,
+               '4nn': cl.cluster_4_site_4nn,
+               '5nn': cl.cluster_4_site_5nn,
+               '6nn': cl.cluster_5_site_6nn,
+               '7nn': cl.cluster_5_site_7nn,
+               '8nn': cl.cluster_5_site_8nn,
+               '9nn': cl.cluster_6_site_9nn,
+              'body': cl.cluster_3_site_3
+                    }
+
+    with open(dir / "energetics_input.dat", "w") as f:
+        f.write('# O at Pt(111)\n')
+        f.write('# For structures and values see Dropbox:\n')
+        f.write('# "Kinetics of Surface Reactions/zacros/O_Pt111/O_Pt111 structures.pptx"\n')
+        f.write('\n')
+        f.write('energetics\n')
+        f.write('\n')
+
+        for i, s in enumerate(cluster_list):
+            content = dispatcher[s]()
+            if eng_list is not None:
+                content.insert(-1, f"  cluster_eng   {eng_list[i]:.6f}\n")
+            [f.write(line) for line in content]
+            f.write('\n')
+
+        f.write('end_energetics\n')
+
+
+    return
+
 def make_energetics_input(dir, cluster_list, eng_list=None):
     """
     Creates an energetics input file for Zacros containing cluster definitions.
@@ -1788,4 +1849,3 @@ def make_energetics_input(dir, cluster_list, eng_list=None):
 
 
     return
-

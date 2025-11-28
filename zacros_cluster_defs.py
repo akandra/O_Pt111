@@ -174,6 +174,131 @@ def cluster_6_site_9nn():
   return content
 
 #   Generates Zacros 3-site cluster with 3 adsorbates.
+
+def cluster_1_1_1():
+  # Does not discriminate b/w a and b variants
+  content = [
+    f"cluster O_fcc-1-1-1b1\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 3\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1a1():
+  content = [
+    f"cluster O_fcc-1-1-1a1\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:180.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1b1():
+  content = [
+    f"cluster O_fcc-1-1-1b1\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:180.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1a2():
+  content = [
+    f"cluster O_fcc-1-1-1a2\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:0.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1b2():
+  content = [
+    f"cluster O_fcc-1-1-1b2\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:0.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1a3():
+  content = [
+    f"cluster O_fcc-1-1-1a3\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-120.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_1_1b3():
+  content = [
+    f"cluster O_fcc-1-1-1b3\n",
+    f"sites 3\n",
+    f"neighboring 1-2 1-3 2-3\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-60.0\n",
+    f"end_cluster\n"]
+
+  return content
+
 def cluster_1_1_2():
   content = [
     f"cluster O_fcc-1-1-2\n",
@@ -206,78 +331,6 @@ def cluster_1_1_3():
 
   return content
 
-def cluster_1_1_1a1():
-  content = [
-    f"cluster O_fcc-1-1-1a1\n",
-    f"sites 3\n",
-    f"neighboring 1-2 1-3\n",
-    f"lattice_state\n",
-    f"  1 O* 1\n",
-    f"  2 O* 1\n",
-    f"  3 O* 1\n",
-    f"  site_types fcc fcc fcc\n",
-    f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0\n",
-    f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:0.0\n",
-    f"end_cluster\n"]
-
-  return content
-
-def cluster_1_1_1a2():
-  content = [
-    f"cluster O_fcc-1-1-1a2\n",
-    f"sites 3\n",
-    f"neighboring 1-2 1-3\n",
-    f"lattice_state\n",
-    f"  1 O* 1\n",
-    f"  2 O* 1\n",
-    f"  3 O* 1\n",
-    f"  site_types fcc fcc fcc\n",
-    f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0\n",
-    f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:180.0\n",
-    f"end_cluster\n"]
-
-  return content
-
-def cluster_1_1_1a3():
-  content = [
-    f"cluster O_fcc-1-1-1a3\n",
-    f"sites 3\n",
-    f"neighboring 1-2 1-3\n",
-    f"lattice_state\n",
-    f"  1 O* 1\n",
-    f"  2 O* 1\n",
-    f"  3 O* 1\n",
-    f"  site_types fcc fcc fcc\n",
-    f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0\n",
-    f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:120.0\n",
-    f"end_cluster\n"]
-
-  return content
-
-def cluster_1_1_1a4():
-  content = [
-    f"cluster O_fcc-1-1-1a4\n",
-    f"sites 3\n",
-    f"neighboring 1-2 1-3\n",
-    f"lattice_state\n",
-    f"  1 O* 1\n",
-    f"  2 O* 1\n",
-    f"  3 O* 1\n",
-    f"  site_types fcc fcc fcc\n",
-    f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0\n",
-    f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:-120.0\n",
-    f"end_cluster\n"]
-
-  return content
-
 def cluster_1_2_3a1():
   content = [
     f"cluster O_fcc-1-2-3a1\n",
@@ -292,7 +345,7 @@ def cluster_1_2_3a1():
     f"  graph_multiplicity 1\n",
     f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
     f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:60.0\n",
+    f"  absl_orientation 1-2:180.0\n",
     f"end_cluster\n"]
 
   return content
@@ -309,9 +362,9 @@ def cluster_1_2_3a2():
     f"  3 O* 1\n",
     f"  site_types fcc fcc fcc fcc\n",
     f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0  2-3-4:120.0\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
     f"  no_mirror_images\n",
-    f"  absl_orientation 1-2:60.0\n",
+    f"  absl_orientation 1-2:0.0\n",
     f"end_cluster\n"]
 
   return content
@@ -328,81 +381,237 @@ def cluster_1_2_3a3():
     f"  3 O* 1\n",
     f"  site_types fcc fcc fcc fcc\n",
     f"  graph_multiplicity 1\n",
-    f"  angles 1-2-3:-60.0  2-3-4:120.0\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
     f"  no_mirror_images\n",
     f"  absl_orientation 1-2:60.0\n",
     f"end_cluster\n"]
 
   return content
 
+def cluster_1_2_3a4():
+  content = [
+    f"cluster O_fcc-1-2-3a4\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:120.0\n",
+    f"end_cluster\n"]
 
-cluster O_triplet_1-2-3b
-  sites 4
-  neighboring 1-2 1-3 2-3 3-4
-  lattice_state
-    1 O*   1
-    2 O*   1
-    & &    &
-    3 O*   1
-	
-  variant b1
-    site_types          fcc_t fcc_t fcc_t fcc_t
-    graph_multiplicity  1
-    angles              1-2-3:60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:180.0
-    cluster_eng         0.016
-  end_variant
+  return content
 
-  variant b2
-    site_types          fcc_t fcc_t fcc_t fcc_t
-	graph_multiplicity  1
-    angles              1-2-3:-60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:0.0
-    cluster_eng         0.016
-  end_variant
+def cluster_1_2_3a5():
+  content = [
+    f"cluster O_fcc-1-2-3a5\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-60.0\n",
+    f"end_cluster\n"]
 
-  variant b3
-    site_types          fcc_t fcc_t fcc_t fcc_t
-    graph_multiplicity  1
-    angles              1-2-3:60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:-60.0
-    cluster_eng         0.016
-  end_variant
+  return content
 
-  variant b4
-    site_types          fcc_t fcc_t fcc_t fcc_t
-    graph_multiplicity  1
-    angles              1-2-3:-60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:-120.0
-    cluster_eng         0.016
-  end_variant
+def cluster_1_2_3a6():
+  content = [
+    f"cluster O_fcc-1-2-3a6\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-120.0\n",
+    f"end_cluster\n"]
 
-  variant b5
-    site_types          fcc_t fcc_t fcc_t fcc_t
-    graph_multiplicity  1
-    angles              1-2-3:60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:60.0
-    cluster_eng         0.016
-  end_variant
-  
-  variant b6
-    site_types          fcc_t fcc_t fcc_t fcc_t
-    graph_multiplicity  1
-    angles              1-2-3:-60.0  2-3-4:180.0 
-    no_mirror_images
-    absl_orientation    1-2:120.0
-    cluster_eng         0.016
-  end_variant
+  return content
 
-end_cluster
+def cluster_1_2_3b1():
+  content = [
+    f"cluster O_fcc-1-2-3b1\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:180.0\n",
+    f"end_cluster\n"]
 
+  return content
 
-############################################################################
+def cluster_1_2_3b2():
+  content = [
+    f"cluster O_fcc-1-2-3b2\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:0.0\n",
+    f"end_cluster\n"]
 
-end_energetics
+  return content
+
+def cluster_1_2_3b3():
+  content = [
+    f"cluster O_fcc-1-2-3b3\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-60.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_2_3b4():
+  content = [
+    f"cluster O_fcc-1-2-3b4\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:-120.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_2_3b5():
+  content = [
+    f"cluster O_fcc-1-2-3b5\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:60.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_2_3b6():
+  content = [
+    f"cluster O_fcc-1-2-3b6\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 1\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
+    f"  no_mirror_images\n",
+    f"  absl_orientation 1-2:120.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_2_2_5():
+  content = [
+    f"cluster O_fcc-2-2-5\n",
+    f"sites 4\n",
+    f"neighboring 1-2 2-3 3-4 4-5\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  & &  &\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 2\n",
+    f"  angles 1-2-3:120.0 2-3-4:180.0  3-4-5:120.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_2_2_6():
+  content = [
+    f"cluster O_fcc-2-2-6\n",
+    f"sites 4\n",
+    f"neighboring 1-2 2-3 3-4 4-5\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  & &  &\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 2\n",
+    f"  angles 1-2-3:120.0 2-3-4:180.0  3-4-5:-120.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_3_3_3():
+  content = [
+    f"cluster O_fcc-3-3-3\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 2-4 2-5 3-5 3-6 4-5 5-6\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  & &  &\n",
+    f"  & &  &\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 2\n",
+    f"  angles 1-2-3:-60.0 1-2-4:180.0  1-3-6:180.0\n",
+    f"end_cluster\n"]
+
+  return content
+
 
