@@ -178,7 +178,7 @@ def cluster_6_site_9nn():
 def cluster_1_1_1():
   # Does not discriminate b/w a and b variants
   content = [
-    f"cluster O_fcc-1-1-1b1\n",
+    f"cluster O_fcc-1-1-1\n",
     f"sites 3\n",
     f"neighboring 1-2 1-3 2-3\n",
     f"lattice_state\n",
@@ -327,6 +327,24 @@ def cluster_1_1_3():
     f"  site_types fcc fcc fcc\n",
     f"  graph_multiplicity 2\n",
     f"  angles 1-2-3:180.0\n",
+    f"end_cluster\n"]
+
+  return content
+
+def cluster_1_2_3():
+  # Does not discriminate b/w a and b variants
+  content = [
+    f"cluster O_fcc-1-2-3\n",
+    f"sites 4\n",
+    f"neighboring 1-2 1-3 2-3 3-4\n",
+    f"lattice_state\n",
+    f"  1 O* 1\n",
+    f"  2 O* 1\n",
+    f"  & &  &\n",
+    f"  3 O* 1\n",
+    f"  site_types fcc fcc fcc fcc\n",
+    f"  graph_multiplicity 2\n",
+    f"  angles 1-2-3:-60.0  2-3-4:180.0\n",
     f"end_cluster\n"]
 
   return content
@@ -562,7 +580,7 @@ def cluster_1_2_3b6():
 def cluster_2_2_5():
   content = [
     f"cluster O_fcc-2-2-5\n",
-    f"sites 4\n",
+    f"sites 5\n",
     f"neighboring 1-2 2-3 3-4 4-5\n",
     f"lattice_state\n",
     f"  1 O* 1\n",
@@ -580,7 +598,7 @@ def cluster_2_2_5():
 def cluster_2_2_6():
   content = [
     f"cluster O_fcc-2-2-6\n",
-    f"sites 4\n",
+    f"sites 5\n",
     f"neighboring 1-2 2-3 3-4 4-5\n",
     f"lattice_state\n",
     f"  1 O* 1\n",
@@ -598,7 +616,7 @@ def cluster_2_2_6():
 def cluster_3_3_3():
   content = [
     f"cluster O_fcc-3-3-3\n",
-    f"sites 4\n",
+    f"sites 6\n",
     f"neighboring 1-2 1-3 2-3 2-4 2-5 3-5 3-6 4-5 5-6\n",
     f"lattice_state\n",
     f"  1 O* 1\n",

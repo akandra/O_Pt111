@@ -23,18 +23,52 @@ class Constants( object ):
                                 [1/2, np.sqrt(3)/2] ] )
 
       # Cluster catalog data
-      self.cluster_dispatch = { '0': cl.cluster_1_site,
-                      '1nn': cl.cluster_2_site,
-                      '2nn': cl.cluster_3_site_2nn,
-                      '3nn': cl.cluster_3_site_3nn,
-                      '4nn': cl.cluster_4_site_4nn,
-                      '5nn': cl.cluster_4_site_5nn,
-                      '6nn': cl.cluster_5_site_6nn,
-                      '7nn': cl.cluster_5_site_7nn,
-                      '8nn': cl.cluster_5_site_8nn,
-                      '9nn': cl.cluster_6_site_9nn,
-                    '3body': cl.cluster_3_site_3
-                    }
+      self.cluster_dispatch = {
+                '0': cl.cluster_1_site,
+              '1nn': cl.cluster_2_site,
+              '2nn': cl.cluster_3_site_2nn,
+              '3nn': cl.cluster_3_site_3nn,
+              '4nn': cl.cluster_4_site_4nn,
+              '5nn': cl.cluster_4_site_5nn,
+              '6nn': cl.cluster_5_site_6nn,
+              '7nn': cl.cluster_5_site_7nn,
+              '8nn': cl.cluster_5_site_8nn,
+              '9nn': cl.cluster_6_site_9nn,
+            '1-1-1':   cl.cluster_1_1_1,
+            '1-1-1a1': cl.cluster_1_1_1a1,
+            '1-1-1b1': cl.cluster_1_1_1b1,
+            '1-1-1a2': cl.cluster_1_1_1a2,
+            '1-1-1b2': cl.cluster_1_1_1b2,
+            '1-1-1a3': cl.cluster_1_1_1a3,
+            '1-1-1b3': cl.cluster_1_1_1b3,
+            '1-1-2':   cl.cluster_1_1_2,
+            '1-1-3':   cl.cluster_1_1_3,
+            '1-2-3':   cl.cluster_1_2_3,
+            '1-2-3a1': cl.cluster_1_2_3a1,
+            '1-2-3b1': cl.cluster_1_2_3b1,
+            '1-2-3a2': cl.cluster_1_2_3a2,
+            '1-2-3b2': cl.cluster_1_2_3b2,
+            '1-2-3a3': cl.cluster_1_2_3a3,
+            '1-2-3b3': cl.cluster_1_2_3b3,
+            '1-2-3a4': cl.cluster_1_2_3a4,
+            '1-2-3b4': cl.cluster_1_2_3b4,
+            '1-2-3a5': cl.cluster_1_2_3a5,
+            '1-2-3b5': cl.cluster_1_2_3b5,
+            '1-2-3a6': cl.cluster_1_2_3a6,
+            '1-2-3b6': cl.cluster_1_2_3b6,
+            '2-2-5':   cl.cluster_2_2_5,
+            '2-2-6':   cl.cluster_2_2_6,
+            '3-3-3':   cl.cluster_3_3_3,
+                  }
+
+       # 3-body clusters Pt(111) from Florian's DFT calculations
+      self.cl_data_fn_ce_3 = {
+         '0'  : 0.0007300961538458997, '1nn': 0.12173694230769284, '2nn': 0.027900057692308137, '3nn': -0.011788807692307559,
+         '4nn': 0.021257942307692596,  '5nn': 0.021467057692308198,'6nn': 0.013423807692308198, '7nn': 0.0148880576923082,
+         '8nn': 0.0143242788461541,    '9nn': 0.006227653846154095,
+         '1-1-1': 0.033312442307691925,  '1-1-2': -0.0016734807692314676, '1-1-3': 0.02377413461538419,
+         '2-2-5': -0.007710461538462173, '2-2-6': -0.004369211538462189,  '3-3-3': 0.0013294615384616616,
+         '1-2-3': -0.04152746153846222}
 
       # 2-body clusters up to 9nn for Pt(111) from Florian's DFT calculations
       self.cl_data_fn_ce = {  '0':  0.0, '1nn':0.123, '2nn':0.029, '3nn':-0.010, '4nn':0.023, 

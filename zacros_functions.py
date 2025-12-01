@@ -16,6 +16,7 @@ import pandas as pd
 from IPython.display import clear_output, display
 import time
 from scipy.spatial import cKDTree,ConvexHull
+import zacros_cluster_defs as cl
 
 # Constants
 en_file_suffix  = 'energy.dat'
@@ -1730,61 +1731,89 @@ def cluster_3_site_3():
 # In[ ]:
 
 
-def make_energetics_input_new(dir, cluster_list, eng_list=None):
-    """
-    Creates an energetics input file for Zacros containing cluster definitions.
-
-    Parameters
-    ----------
-    dir : Path
-        Directory where to write the energetics_input.dat file
-    cluster_list : list
-        List of integers indicating which clusters to include in the input file.
-    eng_list : list, optional
-        List of floats indicating the cluster energies corresponding to the clusters in shell_list.
-        If None, no energies are included in the input file (default: None)
-
-    Returns
-    -------
-    None
-
-    """
-
-      # Cluster catalog data
-    dispatcher = { '0': cl.cluster_1_site,
-               '1nn': cl.cluster_2_site,
-               '2nn': cl.cluster_3_site_2nn,
-               '3nn': cl.cluster_3_site_3nn,
-               '4nn': cl.cluster_4_site_4nn,
-               '5nn': cl.cluster_4_site_5nn,
-               '6nn': cl.cluster_5_site_6nn,
-               '7nn': cl.cluster_5_site_7nn,
-               '8nn': cl.cluster_5_site_8nn,
-               '9nn': cl.cluster_6_site_9nn,
-              'body': cl.cluster_3_site_3
-                    }
-
-    with open(dir / "energetics_input.dat", "w") as f:
-        f.write('# O at Pt(111)\n')
-        f.write('# For structures and values see Dropbox:\n')
-        f.write('# "Kinetics of Surface Reactions/zacros/O_Pt111/O_Pt111 structures.pptx"\n')
-        f.write('\n')
-        f.write('energetics\n')
-        f.write('\n')
-
-        for i, s in enumerate(cluster_list):
-            content = dispatcher[s]()
-            if eng_list is not None:
-                content.insert(-1, f"  cluster_eng   {eng_list[i]:.6f}\n")
-            [f.write(line) for line in content]
-            f.write('\n')
-
-        f.write('end_energetics\n')
-
-
-    return
-
 def make_energetics_input(dir, cluster_list, eng_list=None):
+  """
+  Creates an energetics input file for Zacros containing cluster definitions.
+
+  Parameters
+  ----------
+  dir : Path
+      Directory where to write the energetics_input.dat file
+  cluster_list : list
+      List of keys indicating which clusters to include into the input file.
+  eng_list : list, optional
+      List of floats indicating the cluster energies corresponding to the clusters in shell_list.
+      If None, no energies are included in the input file (default: None)
+
+  Returns
+  -------
+  None
+
+  """
+
+  # Cluster catalog data
+  dispatcher = {'0': cl.cluster_1_site,
+              '1nn': cl.cluster_2_site,
+              '2nn': cl.cluster_3_site_2nn,
+              '3nn': cl.cluster_3_site_3nn,
+              '4nn': cl.cluster_4_site_4nn,
+              '5nn': cl.cluster_4_site_5nn,
+              '6nn': cl.cluster_5_site_6nn,
+              '7nn': cl.cluster_5_site_7nn,
+              '8nn': cl.cluster_5_site_8nn,
+              '9nn': cl.cluster_6_site_9nn,
+            '1-1-1':   cl.cluster_1_1_1,
+            '1-1-1a1': cl.cluster_1_1_1a1,
+            '1-1-1b1': cl.cluster_1_1_1b1,
+            '1-1-1a2': cl.cluster_1_1_1a2,
+            '1-1-1b2': cl.cluster_1_1_1b2,
+            '1-1-1a3': cl.cluster_1_1_1a3,
+            '1-1-1b3': cl.cluster_1_1_1b3,
+            '1-1-2':   cl.cluster_1_1_2,
+            '1-1-3':   cl.cluster_1_1_3,
+            '1-2-3':   cl.cluster_1_2_3,
+            '1-2-3a1': cl.cluster_1_2_3a1,
+            '1-2-3b1': cl.cluster_1_2_3b1,
+            '1-2-3a2': cl.cluster_1_2_3a2,
+            '1-2-3b2': cl.cluster_1_2_3b2,
+            '1-2-3a3': cl.cluster_1_2_3a3,
+            '1-2-3b3': cl.cluster_1_2_3b3,
+            '1-2-3a4': cl.cluster_1_2_3a4,
+            '1-2-3b4': cl.cluster_1_2_3b4,
+            '1-2-3a5': cl.cluster_1_2_3a5,
+            '1-2-3b5': cl.cluster_1_2_3b5,
+            '1-2-3a6': cl.cluster_1_2_3a6,
+            '1-2-3b6': cl.cluster_1_2_3b6,
+            '2-2-5':   cl.cluster_2_2_5,
+            '2-2-6':   cl.cluster_2_2_6,
+            '3-3-3':   cl.cluster_3_3_3,
+                  }
+
+  with open(dir / "energetics_input.dat", "w") as f:
+      f.write('# O at Pt(111)\n')
+      f.write('# For structures and values see Dropbox:\n')
+      f.write('# "Kinetics of Surface Reactions/zacros/O_Pt111/O_Pt111 structures.pptx"\n')
+      f.write('\n')
+      f.write('energetics\n')
+      f.write('\n')
+
+      for i, s in enumerate(cluster_list):
+          if s in dispatcher.keys():
+              content = dispatcher[s]()
+          else:
+              raise SystemExit(f'make_energetics_input: cluster {s} unknown. Consult a dispatcher at zacros_functions.py')
+          
+          if eng_list is not None:
+              content.insert(-1, f"  cluster_eng   {eng_list[i]:.6f}\n")
+          [f.write(line) for line in content]
+          f.write('\n')
+
+      f.write('end_energetics\n')
+
+
+  return
+
+def make_energetics_input_old(dir, cluster_list, eng_list=None):
     """
     Creates an energetics input file for Zacros containing cluster definitions.
 
