@@ -38,7 +38,8 @@ class lattice:
         if self.folder is None:
             print('nothing to get: lattice folder not defined')
             return
-        
+
+        self.folder = Path(self.folder)        
         #
         # Read lattice input file
         #
