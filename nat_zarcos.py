@@ -147,6 +147,7 @@ class state:
         try:
             with open(folder / 'history_output.txt', 'r') as f:
                 content = f.readlines()
+                
 
             for site in range(self.nsites):
                 parts = content[7 + idx*(self.nsites+1) + site].split()
