@@ -1,8 +1,12 @@
 # class definitions for working with Zacros
+
 import numpy as np
 from pathlib import Path
 
+#------------------------------------------------------------------------------------------------
 # class defining a lattice
+#------------------------------------------------------------------------------------------------
+
 class lattice:
     
     def __init__(self, dirname=None):
@@ -39,7 +43,7 @@ class lattice:
             print('nothing to get: lattice folder not defined')
             return
 
-        self.folder = Path(self.folder)        
+        self.folder = Path(self.folder)
         #
         # Read lattice input file
         #
@@ -105,24 +109,51 @@ class lattice:
         except:
             print(f'cannot read lattice_output.txt from {str(self.folder)}')
 
-        self.site_coordinates = np.array(site_coordinates, dtype=float)
+        self.coordinates = np.array(site_coordinates, dtype=float)
         self.site_types = np.array(site_types, dtype=int)
         self.site_coordinations = np.array(site_coordinations, dtype=int)
         self.site_nns = site_nns
 
+    def __len__(self):
+        return self.size[0] * self.size[1] * self.n_cell_sites
+
+#------------------------------------------------------------------------------------------------
 # class defining a lattice state
+#------------------------------------------------------------------------------------------------
+
 class state:
     
-    def __init__(self):
-        # default is no gas species and a single adsorbed hydrogen
+    def __init__(self, nsites):
+        # default is no species
+        self.nsites = nsites
         self.n_gas_species = 0
         self.gas_species_names = []
-        self.n_surf_species = 1
-        self.surf_specs_names = ['H*']
-        self.surf_specs_dent = [1]
-        # Arrays defining the adsorbesd species on the lattice
-        # with indices corresponding to lattice site indices starting at 1 )
-        self.ads_ids =    np.array([1], dtype=int)
-        self.occupation = np.array([1], dtype=int)
-        self.dentation =  np.array([1], dtype=int)
+        self.n_surf_species = 0
+        self.surf_species_names = []
+        self.surf_species_dent = []
+        # Arrays defining the adsorbed species on the lattice
+        # with indices corresponding to lattice site indices starting at 1 
+        self.ads_ids =    np.zeros(nsites, dtype=int)
+        self.occupation = np.zeros(nsites, dtype=int)
+        self.dentation =  np.zeros(nsites, dtype=int)
+
+
+    def get_state(self, dirname, idx=0):
+
+        folder = Path(dirname)
+
+        # Read configuration from history_output.txt file
+
+        try:
+            with open(folder / 'history_output.txt', 'r') as f:
+                content = f.readlines()
+
+            for site in range(self.nsites):
+                parts = content[7 + idx*(self.nsites+1) + site].split()
+                self.ads_ids[site]    = int(parts[1])
+                self.occupation[site] = int(parts[2])
+                self.dentation[site]  = int(parts[3])
+        except:
+            print(f'cannot read state_output.txt from {str(folder)}')
+
 
