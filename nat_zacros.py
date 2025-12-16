@@ -117,6 +117,122 @@ class lattice:
     def __len__(self):
         return self.size[0] * self.size[1] * self.n_cell_sites
 
+    def apply_pbc(self, coords):
+        """
+        Apply periodic boundary conditions to wrap coordinates into primary cell.
+        
+        Parameters
+        ----------
+        coords : array_like, shape (N, 2) or (2,)
+            Cartesian coordinates to wrap
+            
+        Returns
+        -------
+        ndarray
+            Wrapped coordinates in primary cell
+        """
+        coords = np.atleast_2d(coords)
+        # Convert to fractional coordinates
+        # r_cart = frac @ cell_vectors, so frac = r_cart @ inv(cell_vectors)
+        cell_inv = np.linalg.inv(self.cell_vectors)
+        frac_coords = coords @ cell_inv
+        
+        # Wrap to [0, 1)
+        frac_coords = frac_coords - np.floor(frac_coords)
+        
+        # Convert back to Cartesian
+        cart_coords = frac_coords @ self.cell_vectors
+        
+        return cart_coords.squeeze()
+
+    def minimum_image_distance(self, coord1, coord2):
+        """
+        Calculate minimum image distance between two points with PBC.
+        
+        Parameters
+        ----------
+        coord1, coord2 : array_like, shape (2,)
+            Cartesian coordinates of two points
+            
+        Returns
+        -------
+        float
+            Minimum distance respecting periodic boundary conditions
+        """
+        # Displacement vector
+        dr = np.array(coord2) - np.array(coord1)
+        
+        # Convert to fractional coordinates
+        # cell_vectors rows are v1, v2, so: r_cart = frac @ cell_vectors
+        # Therefore: frac = r_cart @ inv(cell_vectors)
+        cell_inv = np.linalg.inv(self.cell_vectors)
+        frac_dr = dr @ cell_inv
+        
+        # Apply minimum image convention: shift by -1, 0, or +1
+        frac_dr = frac_dr - np.rint(frac_dr)
+        
+        # Convert back to Cartesian
+        cart_dr = frac_dr @ self.cell_vectors
+        
+        return np.linalg.norm(cart_dr)
+
+    def get_nn_distance(self, order=1):
+        """
+        Get nearest neighbor distance for FCC(111) lattice.
+        
+        Parameters
+        ----------
+        order : int
+            Neighbor order (1=1nn, 2=2nn, etc.)
+            
+        Returns
+        -------
+        float
+            Distance to nth nearest neighbor
+            
+        Notes
+        -----
+        For FCC(111) with lattice constant a:
+        1nn = a, 2nn = sqrt(3)*a, 3nn = 2*a, etc.
+        """
+        a = np.linalg.norm(self.unit_cell_vectors[0])
+        
+        # Distance formulas for FCC(111)
+        nn_distances = {
+            1: a,
+            2: np.sqrt(3) * a,
+            3: 2 * a,
+            4: np.sqrt(7) * a,
+            5: 3 * a,
+            6: np.sqrt(12) * a,
+            7: np.sqrt(13) * a,
+            8: 4 * a,
+            9: np.sqrt(19) * a,
+        }
+        
+        if order in nn_distances:
+            return nn_distances[order]
+        else:
+            raise ValueError(f"Neighbor order {order} not implemented. Valid orders: 1-9")
+
+    def get_cell_area(self):
+        """
+        Calculate area of the simulation cell.
+        
+        Returns
+        -------
+        float
+            Area in square distance units
+        """
+        # 2D cross product: |v1 × v2| = v1_x * v2_y - v1_y * v2_x
+        v1, v2 = self.cell_vectors
+        return abs(v1[0] * v2[1] - v1[1] * v2[0])
+
+    def __repr__(self):
+        """String representation of lattice"""
+        return (f"lattice(type='{self.type}', size={tuple(self.size)}, "
+                f"nsites={len(self)}, area={self.get_cell_area():.2f})")
+
 #------------------------------------------------------------------------------------------------
 # class defining a lattice state
 #------------------------------------------------------------------------------------------------
