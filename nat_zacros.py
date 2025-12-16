@@ -131,6 +131,7 @@ class state:
         self.n_surf_species = 0
         self.surf_species_names = []
         self.surf_species_dent = []
+
         # Arrays defining the adsorbed species on the lattice
         # with indices corresponding to lattice site indices starting at 1 
         self.ads_ids =    np.zeros(nsites, dtype=int)
@@ -146,8 +147,7 @@ class state:
 
         try:
             with open(folder / 'history_output.txt', 'r') as f:
-                content = f.readlines()
-                
+                content = f.readlines()    
 
             for site in range(self.nsites):
                 parts = content[7 + idx*(self.nsites+1) + site].split()
@@ -156,5 +156,72 @@ class state:
                 self.dentation[site]  = int(parts[3])
         except:
             print(f'cannot read state_output.txt from {str(folder)}')
+
+    def get_coverage(self):
+        """
+        Calculate the coverage (fraction of occupied sites).
+        
+        Returns
+        -------
+        float
+            Fraction of sites that are occupied (0.0 to 1.0)
+        """
+        return np.count_nonzero(self.occupation) / self.nsites
+
+    def get_occupied_sites(self):
+        """
+        Get indices of all occupied sites.
+        
+        Returns
+        -------
+        ndarray
+            Array of site indices where occupation > 0
+        """
+        return np.where(self.occupation > 0)[0]
+
+    def get_empty_sites(self):
+        """
+        Get indices of all empty sites.
+        
+        Returns
+        -------
+        ndarray
+            Array of site indices where occupation == 0
+        """
+        return np.where(self.occupation == 0)[0]
+
+    def get_occupied_coords(self, lattice):
+        """
+        Get Cartesian coordinates of occupied sites.
+        
+        Parameters
+        ----------
+        lattice : lattice object
+            Lattice object containing site coordinates
+            
+        Returns
+        -------
+        ndarray
+            (N, 2) array of coordinates for occupied sites
+        """
+        mask = self.occupation > 0
+        return lattice.coordinates[mask]
+
+    def get_n_adsorbates(self):
+        """
+        Get total number of adsorbates on the surface.
+        
+        Returns
+        -------
+        int
+            Number of occupied sites
+        """
+        return np.count_nonzero(self.occupation)
+
+    def __repr__(self):
+        """String representation of state"""
+        n_ads = self.get_n_adsorbates()
+        coverage = self.get_coverage()
+        return f"state(nsites={self.nsites}, n_adsorbates={n_ads}, coverage={coverage:.3f})"
 
 
