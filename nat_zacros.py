@@ -43,7 +43,6 @@ class lattice:
         self.site_coordinations = np.array([6])
         # list of arrays of nearest neighbors for each lattice site
         self.site_nns = [ np.array([0,0,0,0,0,0]) ]
-        self.nsites = 1  # Number of lattice sites
 
         if dirname is not None:
             self.folder = Path(dirname) 
@@ -125,7 +124,6 @@ class lattice:
         self.site_types = np.array(site_types, dtype=int)
         self.site_coordinations = np.array(site_coordinations, dtype=int)
         self.site_nns = site_nns
-        self.nsites = len(site_coordinates)
 
     def __len__(self):
         return self.size[0] * self.size[1] * self.n_cell_sites
@@ -257,10 +255,11 @@ class lattice:
 class state:
     
 
-    def __init__(self, lattice):
+    def __init__(self, lattice, dirname=None):
+        self.folder = None
+
         # Store reference to lattice
         self.lattice = lattice
-        self.nsites = len(lattice)
         
         # default is no species
         self.n_gas_species = 0
@@ -270,29 +269,37 @@ class state:
         self.surf_species_dent = []
 
         # Arrays defining the adsorbed species on the lattice
-        # with indices corresponding to lattice site indices starting at 1 
-        self.ads_ids =    np.zeros(self.nsites, dtype=int)
-        self.occupation = np.zeros(self.nsites, dtype=int)
-        self.dentation =  np.zeros(self.nsites, dtype=int)
+        # with indices corresponding to lattice site indices starting at 1
+
+        nsites = len(self.lattice) 
+        self.ads_ids =    np.zeros(nsites, dtype=int)
+        self.occupation = np.zeros(nsites, dtype=int)
+        self.dentation =  np.zeros(nsites, dtype=int)
+
+        if dirname is not None:
+            self.folder = Path(dirname) 
+            self.get_state()
 
 
-    def get_state(self, dirname, idx=0):
+    def get_state(self, idx=0):
 
-        folder = Path(dirname)
-
+        
         # Read configuration from history_output.txt file
 
+        self.folder = Path(self.folder)
+
         try:
-            with open(folder / 'history_output.txt', 'r') as f:
+            with open(self.folder / 'history_output.txt', 'r') as f:
                 content = f.readlines()    
 
-            for site in range(self.nsites):
-                parts = content[7 + idx*(self.nsites+1) + site].split()
+            nsites = len(self.lattice)
+            for site in range(nsites):
+                parts = content[7 + idx*(nsites+1) + site].split()
                 self.ads_ids[site]    = int(parts[1])
                 self.occupation[site] = int(parts[2])
                 self.dentation[site]  = int(parts[3])
         except:
-            print(f'cannot read state_output.txt from {str(folder)}')
+            print(f'cannot read history_output.txt from {str(self.folder)}')
 
     
     def get_coverage(self):
@@ -304,7 +311,7 @@ class state:
         float
             Fraction of sites that are occupied (0.0 to 1.0)
         """
-        return np.count_nonzero(self.occupation) / self.nsites
+        return np.count_nonzero(self.occupation) / len(self.lattice)
 
     
     def get_occupied_sites(self):
@@ -344,7 +351,7 @@ class state:
         return self.lattice.coordinates[mask]
 
 
-    def get_n_adsorbates(self):
+    def n_ads(self):
         """
         Get total number of adsorbates on the surface.
         
@@ -358,9 +365,8 @@ class state:
 
     def __repr__(self):
         """String representation of state"""
-        n_ads = self.get_n_adsorbates()
         coverage = self.get_coverage()
-        return f"state(nsites={self.nsites}, n_adsorbates={n_ads}, coverage={coverage:.3f})"
+        return f"state(nsites={len(self.lattice)}, n_adsorbates={self.n_ads()}, coverage={coverage:.3f})"
 
 
 #------------------------------------------------------------------------------------------------
@@ -385,6 +391,9 @@ class trajectory:
         Directory containing trajectory data
     """
     
+# --------------------------------------------------------------------------
+# to do: remove lattice from the argument list
+# 
     def __init__(self, lattice, dirname=None):
         """
         Initialize trajectory with lattice and optional data folder.
@@ -415,12 +424,13 @@ class trajectory:
         end : int, optional
             Last state index to load (None = all)
         step : int, default 1
-            Stride for loading states
+            Stride for loading states (applies to configuration indices)
         load_energy : bool, default True
             Whether to extract energy values
         energy_only : bool, default False
             If True, only load time and energy without parsing full state configurations.
-            Much faster for energy-only analysis.
+            Much faster for energy-only analysis. Recommended to use with step > 1
+            for equilibration detection.
         """
         folder = Path(dirname) if dirname else self.folder
         
@@ -429,40 +439,61 @@ class trajectory:
             return
             
         try:
-            with open(folder / 'history_output.txt', 'r') as f:
-                content = f.readlines()
+            if energy_only:
+                # Fast path: scan file for configuration headers only
+                with open(folder / 'history_output.txt', 'r') as f:
+                    idx = 0
+                    for line in f:
+                        if 'configuration' in line:
+                            # Apply start/end/step filters
+                            if idx < start:
+                                idx += 1
+                                continue
+                            if end is not None and idx >= end:
+                                break
+                            if (idx - start) % step != 0:
+                                idx += 1
+                                continue
+                                
+                            # Parse time and energy from header
+                            parts = line.split()
+                            time = float(parts[3])
+                            energy = float(parts[5]) if load_energy and len(parts) > 5 else 0.0
+                            
+                            self.times.append(time)
+                            self.energies.append(energy)
+                            idx += 1
+            else:
+                # Full path: load complete state configurations
+                with open(folder / 'history_output.txt', 'r') as f:
+                    content = f.readlines()
+                    
+                # Format: header lines, then blocks of (nsites+1) lines per state
+                nsites = len(self.lattice)
+                n_states = (len(content) - 7) // (nsites + 1)
                 
-            # Parse time points and states
-            # Format: header lines, then blocks of (nsites+1) lines per state
-            nsites = self.lattice.nsites
-            
-            # Count available states
-            n_states = (len(content) - 7) // (nsites + 1)
-            
-            if end is None:
-                end = n_states
-            
-            for idx in range(start, min(end, n_states), step):
-                # Parse configuration header line
-                # Format: configuration <idx> time <time> energy <energy> ...
-                header_line = content[7 + idx * (nsites + 1)]
+                if end is None:
+                    end = n_states
                 
-                if 'configuration' in header_line:
-                    parts = header_line.split()
-                    time = float(parts[3])
-                    energy = float(parts[5]) if load_energy and len(parts) > 5 else 0.0
-                else:
-                    time = idx
-                    energy = 0.0
-                
-                # Only load full state if not in energy_only mode
-                if not energy_only:
+                for idx in range(start, min(end, n_states), step):
+                    # Parse configuration header line
+                    header_line = content[7 + idx * (nsites + 1)]
+                    
+                    if 'configuration' in header_line:
+                        parts = header_line.split()
+                        time = float(parts[3])
+                        energy = float(parts[5]) if load_energy and len(parts) > 5 else 0.0
+                    else:
+                        time = idx
+                        energy = 0.0
+                    
+                    # Load full state configuration
                     st = state(self.lattice)
-                    st.get_state(folder, idx=idx)
+                    st.folder = folder
+                    st.get_state(idx=idx)
                     self.states.append(st)
-                
-                self.times.append(time)
-                self.energies.append(energy)
+                    self.times.append(time)
+                    self.energies.append(energy)
                 
         except Exception as e:
             print(f'Error loading trajectory from {str(folder)}: {e}')
@@ -622,13 +653,69 @@ class trajectory:
             # Keep existing times/energies, just populate states
             for idx in range(eq_idx, len(self.times)):
                 st = state(self.lattice)
-                st.get_state(folder, idx=idx)
+                st.folder = folder
+                st.get_state(idx=idx)
                 self.states.append(st)
                 
         except Exception as e:
             print(f'Error loading equilibrated states from {str(folder)}: {e}')
+    
+    def get_g_ref(self, r_max=None, dr=0.1):
+        """
+        Calculate reference RDF for full lattice (all sites, coverage=1).
         
-    def get_rdf(self, r_max=None, n_bins=100):
+        This computes the number of neighbors in each distance shell,
+        used to normalize the RDF such that g(r)=1 for ideal gas.
+        
+        Parameters
+        ----------
+        r_max : float, optional
+            Maximum distance for RDF
+        dr : float, default 0.1
+            Bin width in Angstroms
+            
+        Returns
+        -------
+        r_bins : ndarray
+            Bin centers
+        g_ref : ndarray
+            Number of neighbors in each shell (integer counts)
+        """
+        if r_max is None:
+            v1 = self.lattice.cell_vectors[0]
+            v2 = self.lattice.cell_vectors[1]
+            l1 = np.linalg.norm(v1)
+            l2 = np.linalg.norm(v2)
+            l3 = np.linalg.norm(v1 + v2)
+            r_max = min(l1, l2, l3) / 2.0
+        
+        # Initialize histogram
+        n_bins = int(np.ceil(r_max / dr))
+        bin_edges = np.linspace(0.0, r_max, n_bins + 1)
+        r_bins = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        counts = np.zeros(n_bins, dtype=int)
+        
+        # Get all lattice site coordinates
+        all_coords = self.lattice.coordinates
+        n_sites = len(all_coords)
+        
+        # Calculate all pairwise distances with PBC
+        for i in range(n_sites - 1):
+            for j in range(i + 1, n_sites):
+                dist = self.lattice.minimum_image_distance(
+                    all_coords[i], all_coords[j]
+                )
+                if 0 < dist <= r_max:
+                    bin_idx = int(dist / dr)
+                    if bin_idx < n_bins:
+                        counts[bin_idx] += 1
+        
+        # Normalize: 2 * counts / n_sites (factor 2 for unordered pairs)
+        g_ref = 2.0 * counts / n_sites
+        
+        return r_bins, g_ref
+        
+    def get_rdf(self, r_max=None, dr=0.1, g_ref=None):
         """
         Calculate radial distribution function averaged over trajectory.
         
@@ -636,29 +723,42 @@ class trajectory:
         ----------
         r_max : float, optional
             Maximum distance for RDF (default: half of cell diagonal)
-        n_bins : int, default 100
-            Number of bins for histogram
+        dr : float, default 0.1
+            Bin width in Angstroms
+        g_ref : ndarray, optional
+            Reference RDF for normalization (from full lattice at coverage=1).
+            If provided, normalizes by number of neighbors in each shell.
             
         Returns
         -------
         r_bins : ndarray
-            Bin centers
+            Bin centers  
         g_r : ndarray
-            RDF values
+            RDF values normalized such that g(r)=1 for ideal gas
             
         Notes
         -----
         RDF is calculated for occupied sites only and averaged over all states.
+        Normalization follows zacros_functions.py: divides counts by g_ref 
+        (number of neighbors in each shell) and by coverage.
         """
         if r_max is None:
-            # Default: half the cell diagonal
-            diag = np.linalg.norm(self.lattice.cell_vectors[0] + self.lattice.cell_vectors[1])
-            r_max = diag / 2
+            # Default: half the minimum cell dimension
+            v1 = self.lattice.cell_vectors[0]
+            v2 = self.lattice.cell_vectors[1]
+            l1 = np.linalg.norm(v1)
+            l2 = np.linalg.norm(v2)
+            l3 = np.linalg.norm(v1 + v2)
+            r_max = min(l1, l2, l3) / 2.0
             
         # Initialize histogram
-        bin_edges = np.linspace(0, r_max, n_bins + 1)
-        r_bins = (bin_edges[:-1] + bin_edges[1:]) / 2
+        n_bins = int(np.ceil(r_max / dr))
+        bin_edges = np.linspace(0.0, r_max, n_bins + 1)
+        r_bins = 0.5 * (bin_edges[:-1] + bin_edges[1:])
         g_r = np.zeros(n_bins)
+        
+        # Get average coverage
+        avg_coverage = np.mean([s.get_coverage() for s in self.states])
         
         # Accumulate over all states
         for st in self.states:
@@ -667,32 +767,31 @@ class trajectory:
             
             if n_occupied < 2:
                 continue
-                
+            
+            counts = np.zeros(n_bins, dtype=int)
             # Calculate all pairwise distances with PBC
-            for i in range(n_occupied):
+            for i in range(n_occupied - 1):
                 for j in range(i + 1, n_occupied):
                     dist = self.lattice.minimum_image_distance(
                         occupied_coords[i], occupied_coords[j]
                     )
-                    if dist < r_max:
-                        bin_idx = int(dist / r_max * n_bins)
+                    if 0 < dist <= r_max:
+                        bin_idx = int(dist / dr)
                         if bin_idx < n_bins:
-                            g_r[bin_idx] += 2  # count both i-j and j-i
+                            counts[bin_idx] += 1
+            
+            # Normalize by g_ref if provided (number of neighbors in each shell)
+            if g_ref is not None:
+                counts_n = np.zeros_like(counts, dtype=float)
+                np.divide(counts, g_ref, out=counts_n, where=g_ref!=0)
+                g_r += counts_n / n_occupied / avg_coverage
+            else:
+                g_r += counts / n_occupied / avg_coverage
         
-        # Normalize by number of states and ideal gas reference
+        # Normalize by number of states
+        # Factor of 2 for unordered pairs
         if len(self.states) > 0:
-            g_r /= len(self.states)
-            
-            # Normalize by bin area and density
-            cell_area = self.lattice.get_cell_area()
-            avg_coverage = np.mean([s.get_coverage() for s in self.states])
-            density = avg_coverage * self.lattice.nsites / cell_area
-            
-            for i, r in enumerate(r_bins):
-                if r > 0:
-                    # Bin area (annulus)
-                    bin_area = np.pi * (bin_edges[i+1]**2 - bin_edges[i]**2)
-                    g_r[i] /= (density * bin_area)
+            g_r = 2 * g_r / len(self.states)
                     
         return r_bins, g_r
         
@@ -830,8 +929,16 @@ class trajectory:
         return self.times, coverages
         
     def __len__(self):
-        """Number of states in trajectory"""
-        return len(self.states)
+        """
+        Number of configurations in trajectory.
+        
+        Returns number of states if loaded, otherwise number of time points.
+        This allows len() to work correctly for energy_only trajectories.
+        """
+        if len(self.states) > 0:
+            return len(self.states)
+        else:
+            return len(self.times)
         
     def __getitem__(self, idx):
         """
@@ -860,4 +967,126 @@ class trajectory:
             t_range = f"t=[{self.times[0]:.2f}, {self.times[-1]:.2f}]"
         else:
             t_range = "empty"
-        return f"trajectory(nstates={len(self)}, {t_range}, lattice={self.lattice.nsites} sites)"
+        return f"trajectory(nstates={len(self)}, {t_range}, lattice={len(self.lattice)} sites)"
+
+
+# ==============================================================================
+# Parallel RDF computation functions
+# ==============================================================================
+
+def _compute_single_rdf(args):
+    """
+    Helper function for parallel RDF computation.
+    
+    Parameters
+    ----------
+    args : tuple
+        (trajectory, r_max, dr, g_ref) tuple for computing RDF
+        
+    Returns
+    -------
+    g : ndarray
+        RDF values for this trajectory
+        
+    Notes
+    -----
+    This is a module-level function to ensure it's pickle-able for multiprocessing.
+    """
+    traj, r_max, dr, g_ref = args
+    r, g = traj.get_rdf(r_max=r_max, dr=dr, g_ref=g_ref)
+    return g
+
+
+def compute_rdf_parallel(trajectories, r_max=None, dr=0.1, g_ref=None, n_workers=None):
+    """
+    Compute RDF averaged over multiple trajectories using parallel processing.
+    
+    Parameters
+    ----------
+    trajectories : list of trajectory objects
+        Trajectories to average over. Each trajectory should have states loaded.
+    r_max : float, optional
+        Maximum distance for RDF calculation (Angstroms). 
+        If None, uses minimum cell dimension / 2.
+    dr : float, optional
+        Bin width for RDF histogram (default: 0.1 Angstrom)
+    g_ref : ndarray, optional
+        Reference RDF for normalization (from full lattice).
+        If None, no normalization by coordination numbers.
+    n_workers : int, optional
+        Number of parallel workers. If None, uses all available cores.
+        
+    Returns
+    -------
+    r : ndarray
+        Distance bin centers (Angstroms)
+    g_avg : ndarray
+        Average RDF over all trajectories
+    g_std : ndarray
+        Standard deviation of RDF across trajectories
+        
+    Examples
+    --------
+    >>> # Compute g_ref for normalization
+    >>> r_ref, g_ref = trajs[0].get_g_ref(r_max=40.0, dr=0.1)
+    >>> 
+    >>> # Parallel RDF computation
+    >>> r, g_avg, g_std = compute_rdf_parallel(trajs, r_max=40.0, dr=0.1, 
+    ...                                         g_ref=g_ref, n_workers=4)
+    >>> 
+    >>> # Plot results
+    >>> plt.plot(r, g_avg)
+    >>> plt.fill_between(r, g_avg - g_std, g_avg + g_std, alpha=0.3)
+    
+    Notes
+    -----
+    - Uses ProcessPoolExecutor for true parallel computation
+    - Each trajectory is processed independently (embarrassingly parallel)
+    - Typical speedup: ~N_cores for N_cores << N_trajectories
+    - All trajectories must have states loaded before calling this function
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+    
+    # Try to import tqdm for progress bar
+    try:
+        from tqdm import tqdm
+        use_tqdm = True
+    except ImportError:
+        use_tqdm = False
+    
+    if len(trajectories) == 0:
+        raise ValueError("No trajectories provided")
+    
+    # Determine number of workers
+    if n_workers is None:
+        n_workers = mp.cpu_count()
+    
+    # Prepare arguments for each trajectory
+    args_list = [(traj, r_max, dr, g_ref) for traj in trajectories]
+    
+    # Parallel computation
+    print(f"Computing RDF for {len(trajectories)} trajectories using {n_workers} workers...")
+    
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        if use_tqdm:
+            # With progress bar
+            rdfs = list(tqdm(executor.map(_compute_single_rdf, args_list),
+                            total=len(trajectories),
+                            desc="Computing RDF",
+                            unit="traj"))
+        else:
+            # Without progress bar (fallback)
+            rdfs = list(executor.map(_compute_single_rdf, args_list))
+    
+    # Get distance axis from first trajectory
+    r, _ = trajectories[0].get_rdf(r_max=r_max, dr=dr, g_ref=g_ref)
+    
+    # Compute statistics across trajectories
+    rdfs = np.array(rdfs)
+    g_avg = np.mean(rdfs, axis=0)
+    g_std = np.std(rdfs, axis=0)
+    
+    print(f"\nSuccessfully computed RDF averaged over {len(trajectories)} trajectories")
+    
+    return r, g_avg, g_std
