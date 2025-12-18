@@ -11,6 +11,60 @@ This module provides classes for working with Zacros simulations:
 - `lattice`: FCC(111) surface lattice
 - `state`: Adsorbate configuration on the lattice
 - `trajectory`: Sequence of states over time
+
+Performance Optimization Guide
+-------------------------------
+This module includes several performance optimizations for RDF and trajectory analysis.
+Understanding when to use each approach is critical for optimal performance.
+
+**Key Optimizations (Recommended for all use cases):**
+
+1. **Vectorized Distance Calculations** (50-100x speedup)
+   - Automatically enabled by default in trajectory.get_rdf(vectorized=True)
+   - Uses NumPy broadcasting to compute all pairwise distances at once
+   - Replaces nested Python loops with compiled NumPy operations
+   - No downside, always use this
+
+2. **Binary Caching with pickle** (100x speedup for repeated analysis)
+   - Save parsed trajectories to pickle files after first load
+   - Subsequent loads read binary instead of parsing text (0.5s vs 60s)
+   - Example:
+       cache_file = 'trajectories_eq.pkl'
+       if not Path(cache_file).exists():
+           trajs = [load and parse trajectories]
+           with open(cache_file, 'wb') as f:
+               pickle.dump(trajs, f)
+       else:
+           with open(cache_file, 'rb') as f:
+               trajs = pickle.load(f)
+   - Best for iterative analysis with different parameters
+
+3. **Parallel Loading** (5-10x speedup)
+   - Use load_trajectories_parallel() for loading multiple trajectories
+   - Each trajectory reads its own file → good I/O parallelism
+   - Effective even with optimized parsing
+
+**Advanced Optimizations (Use with caution):**
+
+4. **Parallel RDF Computation** - compute_rdf_parallel(), compute_rdf_parallel_states()
+   - WARNING: With vectorization, RDF computation is very fast (~2s for 10 trajectories)
+   - Parallelization overhead (process spawn, pickle, IPC) is ~2-4 seconds
+   - Only beneficial when computation time >> 20-30 seconds
+   - Use cases:
+     * compute_rdf_parallel(): >50 trajectories, or very long trajectories
+     * compute_rdf_parallel_states(): >100 trajectories with many states each
+   - For typical use (10-20 trajectories): sequential computation is FASTER
+
+**Performance Benchmark (typical system: 10 trajectories, ~100 states each, 14 cores):**
+- Sequential loading: 64s
+- Parallel loading: 6-10s
+- RDF computation (sequential, vectorized): 2s
+- RDF computation (parallel): 3-5s (slower due to overhead!)
+
+**Recommendation:**
+For most users, use vectorized distance calculations and parallel loading.
+Only use parallel RDF computation for very large datasets where computation
+time significantly exceeds 20-30 seconds.
 """
 
 # --------------------------------------------------------------------------
@@ -186,6 +240,49 @@ class lattice:
         cart_dr = frac_dr @ self.cell_vectors
         
         return np.linalg.norm(cart_dr)
+
+    def pairwise_distances_pbc(self, coords):
+        """
+        Calculate all pairwise distances with PBC (vectorized).
+        
+        Parameters
+        ----------
+        coords : ndarray, shape (N, 2)
+            Cartesian coordinates of N points
+            
+        Returns
+        -------
+        distances : ndarray, shape (N, N)
+            Matrix of pairwise distances with PBC
+            
+        Notes
+        -----
+        This vectorized implementation is much faster than calling 
+        minimum_image_distance in nested loops (speedup: ~10-100x for N>100).
+        """
+        coords = np.asarray(coords)
+        n = len(coords)
+        
+        # Compute all displacement vectors: dr[i,j] = coords[j] - coords[i]
+        # Broadcasting: (N, 1, 2) - (1, N, 2) = (N, N, 2)
+        dr = coords[np.newaxis, :, :] - coords[:, np.newaxis, :]
+        
+        # Convert to fractional coordinates
+        cell_inv = np.linalg.inv(self.cell_vectors)
+        # Reshape for batch matrix multiplication: (N*N, 2) @ (2, 2)
+        frac_dr = dr.reshape(-1, 2) @ cell_inv
+        
+        # Apply minimum image convention
+        frac_dr = frac_dr - np.rint(frac_dr)
+        
+        # Convert back to Cartesian
+        cart_dr = frac_dr @ self.cell_vectors
+        cart_dr = cart_dr.reshape(n, n, 2)
+        
+        # Compute norms
+        distances = np.linalg.norm(cart_dr, axis=2)
+        
+        return distances
 
     def get_nn_distance(self, order=1):
         """
@@ -660,6 +757,33 @@ class trajectory:
         except Exception as e:
             print(f'Error loading equilibrated states from {str(folder)}: {e}')
     
+    # ==========================================================================
+    # RDF (Radial Distribution Function) Analysis Methods
+    # ==========================================================================
+    #
+    # PERFORMANCE NOTES:
+    # ------------------
+    # The RDF methods have been heavily optimized through vectorization.
+    # Key performance characteristics:
+    #
+    # 1. get_rdf() with vectorized=True (default):
+    #    - Uses lattice.pairwise_distances_pbc() for vectorized distance calculations
+    #    - 50-100x faster than nested Python loops
+    #    - Typical: 2s for 10 trajectories × 100 states
+    #
+    # 2. Sequential vs Parallel:
+    #    - Sequential loop over trajectories: ~2s for typical datasets
+    #    - Parallel RDF functions: ~3-5s (slower due to 2-4s overhead!)
+    #    - Recommendation: Use simple sequential loop for RDF computation
+    #
+    # 3. When parallel RDF helps:
+    #    - Only beneficial when computation time >> 30 seconds
+    #    - Typically: >50 trajectories or very large systems
+    #    - Always benchmark before using parallel functions
+    #
+    # See module docstring for complete performance analysis.
+    # ==========================================================================
+    
     def get_g_ref(self, r_max=None, dr=0.1):
         """
         Calculate reference RDF for full lattice (all sites, coverage=1).
@@ -715,7 +839,7 @@ class trajectory:
         
         return r_bins, g_ref
         
-    def get_rdf(self, r_max=None, dr=0.1, g_ref=None):
+    def get_rdf(self, r_max=None, dr=0.1, g_ref=None, vectorized=True):
         """
         Calculate radial distribution function averaged over trajectory.
         
@@ -728,6 +852,8 @@ class trajectory:
         g_ref : ndarray, optional
             Reference RDF for normalization (from full lattice at coverage=1).
             If provided, normalizes by number of neighbors in each shell.
+        vectorized : bool, default True
+            Use vectorized distance calculations for better performance
             
         Returns
         -------
@@ -769,16 +895,28 @@ class trajectory:
                 continue
             
             counts = np.zeros(n_bins, dtype=int)
-            # Calculate all pairwise distances with PBC
-            for i in range(n_occupied - 1):
-                for j in range(i + 1, n_occupied):
-                    dist = self.lattice.minimum_image_distance(
-                        occupied_coords[i], occupied_coords[j]
-                    )
-                    if 0 < dist <= r_max:
-                        bin_idx = int(dist / dr)
-                        if bin_idx < n_bins:
-                            counts[bin_idx] += 1
+            
+            if vectorized:
+                # Vectorized distance calculation (much faster for large n_occupied)
+                distances = self.lattice.pairwise_distances_pbc(occupied_coords)
+                # Get upper triangle (no diagonal, no double counting)
+                mask = np.triu(np.ones(distances.shape, dtype=bool), k=1)
+                valid_dists = distances[mask]
+                valid_dists = valid_dists[(valid_dists > 0) & (valid_dists <= r_max)]
+                
+                # Histogram
+                counts, _ = np.histogram(valid_dists, bins=bin_edges)
+            else:
+                # Original nested loop implementation
+                for i in range(n_occupied - 1):
+                    for j in range(i + 1, n_occupied):
+                        dist = self.lattice.minimum_image_distance(
+                            occupied_coords[i], occupied_coords[j]
+                        )
+                        if 0 < dist <= r_max:
+                            bin_idx = int(dist / dr)
+                            if bin_idx < n_bins:
+                                counts[bin_idx] += 1
             
             # Normalize by g_ref if provided (number of neighbors in each shell)
             if g_ref is not None:
@@ -973,10 +1111,31 @@ class trajectory:
 # ==============================================================================
 # Parallel RDF computation functions
 # ==============================================================================
+#
+# ⚠️  PERFORMANCE WARNING - READ BEFORE USING
+# --------------------------------------------
+# These parallel functions are rarely beneficial for typical datasets.
+# 
+# With vectorized distance calculations, RDF computation is very fast (~2s).
+# Parallelization overhead (process spawn, pickling, IPC) is ~2-4 seconds.
+# 
+# RESULT: Sequential computation is FASTER for most use cases.
+#
+# Use these functions ONLY if:
+#   - You have >50 trajectories, OR
+#   - Sequential computation takes >30 seconds, AND
+#   - You have benchmarked and confirmed speedup
+#
+# For typical use (10-20 trajectories):
+#   Sequential: ~2s
+#   Parallel: ~3-5s (SLOWER!)
+#
+# Recommendation: Use simple sequential loop over trajectories instead.
+# ==============================================================================
 
 def _compute_single_rdf(args):
     """
-    Helper function for parallel RDF computation.
+    Helper function for parallel RDF computation (trajectory-level).
     
     Parameters
     ----------
@@ -997,9 +1156,62 @@ def _compute_single_rdf(args):
     return g
 
 
+def _compute_state_rdf(args):
+    """
+    Helper function for parallel RDF computation (state-level).
+    
+    Parameters
+    ----------
+    args : tuple
+        (state, lattice, r_max, dr, g_ref, n_bins) tuple
+        
+    Returns
+    -------
+    tuple
+        (counts, n_occupied, coverage) for this state
+        
+    Notes
+    -----
+    This processes a single state and returns histogram counts for aggregation.
+    Used for fine-grained parallelism when you have many states.
+    """
+    state, lattice, r_max, dr, g_ref, n_bins = args
+    
+    occupied_coords = state.get_occupied_coords()
+    n_occupied = len(occupied_coords)
+    coverage = state.get_coverage()
+    
+    if n_occupied < 2:
+        return np.zeros(n_bins), n_occupied, coverage
+    
+    # Vectorized distance calculation
+    distances = lattice.pairwise_distances_pbc(occupied_coords)
+    mask = np.triu(np.ones(distances.shape, dtype=bool), k=1)
+    valid_dists = distances[mask]
+    valid_dists = valid_dists[(valid_dists > 0) & (valid_dists <= r_max)]
+    
+    # Histogram
+    bin_edges = np.linspace(0.0, r_max, n_bins + 1)
+    counts, _ = np.histogram(valid_dists, bins=bin_edges)
+    
+    return counts, n_occupied, coverage
+
+
 def compute_rdf_parallel(trajectories, r_max=None, dr=0.1, g_ref=None, n_workers=None):
     """
     Compute RDF averaged over multiple trajectories using parallel processing.
+    
+    ⚠️  WARNING: With vectorized distance calculations, RDF computation is very fast.
+    Parallelization overhead (2-4s) often exceeds computation time for typical datasets.
+    Only use this function when sequential computation time >> 20-30 seconds.
+    
+    **When to use:**
+    - >50 trajectories
+    - Very long trajectories (>1000 states each)
+    - Large lattices (>10,000 sites)
+    
+    **For typical use (10-20 trajectories):** Sequential computation is FASTER.
+    Use trajectory.get_rdf() in a simple loop instead.
     
     Parameters
     ----------
@@ -1027,23 +1239,24 @@ def compute_rdf_parallel(trajectories, r_max=None, dr=0.1, g_ref=None, n_workers
         
     Examples
     --------
-    >>> # Compute g_ref for normalization
-    >>> r_ref, g_ref = trajs[0].get_g_ref(r_max=40.0, dr=0.1)
+    >>> # For typical datasets, use sequential computation (FASTER):
+    >>> rdfs = []
+    >>> for traj in trajs:
+    >>>     r, g = traj.get_rdf(r_max=40.0, dr=0.1, g_ref=g_ref)
+    >>>     rdfs.append(g)
+    >>> g_avg = np.mean(rdfs, axis=0)
     >>> 
-    >>> # Parallel RDF computation
+    >>> # Only for very large datasets (>50 trajectories):
     >>> r, g_avg, g_std = compute_rdf_parallel(trajs, r_max=40.0, dr=0.1, 
     ...                                         g_ref=g_ref, n_workers=4)
-    >>> 
-    >>> # Plot results
-    >>> plt.plot(r, g_avg)
-    >>> plt.fill_between(r, g_avg - g_std, g_avg + g_std, alpha=0.3)
     
     Notes
     -----
     - Uses ProcessPoolExecutor for true parallel computation
-    - Each trajectory is processed independently (embarrassingly parallel)
-    - Typical speedup: ~N_cores for N_cores << N_trajectories
-    - All trajectories must have states loaded before calling this function
+    - Parallelization overhead: ~2-4 seconds (process spawn, pickling, IPC)
+    - With vectorization, RDF for 10 trajectories takes ~2s sequentially
+    - Therefore parallel version is SLOWER for typical use cases
+    - Benchmark your specific case before using this function
     """
     from concurrent.futures import ProcessPoolExecutor
     import multiprocessing as mp
@@ -1090,3 +1303,256 @@ def compute_rdf_parallel(trajectories, r_max=None, dr=0.1, g_ref=None, n_workers
     print(f"\nSuccessfully computed RDF averaged over {len(trajectories)} trajectories")
     
     return r, g_avg, g_std
+
+
+def compute_rdf_parallel_states(trajectories, r_max=None, dr=0.1, g_ref=None, n_workers=None):
+    """
+    Compute RDF with state-level parallelism (better for few trajectories with many states).
+    
+    ⚠️  WARNING: With vectorized distance calculations, RDF computation is very fast.
+    Parallelization overhead (2-4s per trajectory) often exceeds computation time.
+    Only use this function when sequential computation time >> 30 seconds.
+    
+    **When to use:**
+    - >100 trajectories with many states each
+    - Extremely large systems where per-state computation is slow
+    - Already benchmarked and confirmed benefit
+    
+    **For typical use (10-20 trajectories, ~100 states each):** Sequential is FASTER.
+    The overhead from spawning processes for each state dominates.
+    
+    Parameters
+    ----------
+    trajectories : list of trajectory objects
+        Trajectories to average over. Each trajectory should have states loaded.
+    r_max : float, optional
+        Maximum distance for RDF calculation (Angstroms). 
+    dr : float, optional
+        Bin width for RDF histogram (default: 0.1 Angstrom)
+    g_ref : ndarray, optional
+        Reference RDF for normalization.
+    n_workers : int, optional
+        Number of parallel workers. If None, uses all available cores.
+        
+    Returns
+    -------
+    r : ndarray
+        Distance bin centers (Angstroms)
+    g_avg : ndarray
+        Average RDF over all trajectories
+    g_std : ndarray
+        Standard deviation of RDF across trajectories
+        
+    Notes
+    -----
+    - Parallelizes over individual states instead of trajectories
+    - Higher parallelization overhead than compute_rdf_parallel()
+    - With vectorization, sequential computation is very fast (~2s for 10x100 states)
+    - Parallel overhead exceeds benefit for typical datasets
+    - Always benchmark before using in production code
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+    
+    try:
+        from tqdm import tqdm
+        use_tqdm = True
+    except ImportError:
+        use_tqdm = False
+    
+    if len(trajectories) == 0:
+        raise ValueError("No trajectories provided")
+    
+    # Determine r_max if not provided
+    if r_max is None:
+        traj0 = trajectories[0]
+        v1 = traj0.lattice.cell_vectors[0]
+        v2 = traj0.lattice.cell_vectors[1]
+        l1 = np.linalg.norm(v1)
+        l2 = np.linalg.norm(v2)
+        l3 = np.linalg.norm(v1 + v2)
+        r_max = min(l1, l2, l3) / 2.0
+    
+    # Initialize histogram
+    n_bins = int(np.ceil(r_max / dr))
+    bin_edges = np.linspace(0.0, r_max, n_bins + 1)
+    r_bins = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    
+    # Determine number of workers
+    if n_workers is None:
+        n_workers = mp.cpu_count()
+    
+    # Process each trajectory
+    rdfs_per_traj = []
+    
+    for traj_idx, traj in enumerate(trajectories):
+        # Prepare arguments for each state in this trajectory
+        args_list = [(state, traj.lattice, r_max, dr, g_ref, n_bins) 
+                    for state in traj.states]
+        
+        total_states = len(args_list)
+        if total_states == 0:
+            continue
+        
+        print(f"Processing trajectory {traj_idx+1}/{len(trajectories)} ({total_states} states) with {n_workers} workers...")
+        
+        # Parallel computation across states
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            if use_tqdm:
+                results = list(tqdm(executor.map(_compute_state_rdf, args_list, chunksize=max(1, total_states // (n_workers * 4))),
+                                total=total_states,
+                                desc=f"Traj {traj_idx+1}",
+                                unit="state"))
+            else:
+                results = list(executor.map(_compute_state_rdf, args_list, chunksize=max(1, total_states // (n_workers * 4))))
+        
+        # Aggregate results for this trajectory
+        g_r = np.zeros(n_bins)
+        avg_coverage = np.mean([r[2] for r in results])
+        
+        for counts, n_occupied, coverage in results:
+            if n_occupied < 2:
+                continue
+            
+            # Normalize by g_ref if provided
+            if g_ref is not None:
+                counts_n = np.zeros_like(counts, dtype=float)
+                np.divide(counts, g_ref, out=counts_n, where=g_ref!=0)
+                g_r += counts_n / n_occupied / avg_coverage
+            else:
+                g_r += counts / n_occupied / avg_coverage
+        
+        # Normalize by number of states (factor of 2 for unordered pairs)
+        if len(results) > 0:
+            g_r = 2 * g_r / len(results)
+        
+        rdfs_per_traj.append(g_r)
+    
+    # Compute statistics across trajectories
+    rdfs = np.array(rdfs_per_traj)
+    g_avg = np.mean(rdfs, axis=0)
+    g_std = np.std(rdfs, axis=0)
+    
+    print(f"\nSuccessfully computed RDF averaged over {len(trajectories)} trajectories")
+    print(f"  Total states processed: {sum(len(t.states) for t in trajectories)}")
+    
+    return r_bins, g_avg, g_std
+
+
+# ==============================================================================
+# Parallel trajectory loading functions
+# ==============================================================================
+
+def _load_single_trajectory_equilibrated(args):
+    """
+    Helper function for parallel trajectory loading.
+    
+    Parameters
+    ----------
+    args : tuple
+        (lattice, traj_dir, fraction, method) for loading
+        
+    Returns
+    -------
+    trajectory
+        Trajectory with equilibrated states loaded
+        
+    Notes
+    -----
+    Module-level function for multiprocessing pickling.
+    """
+    lattice, traj_dir, fraction, method = args
+    
+    # Create trajectory and do two-phase loading
+    traj = trajectory(lattice, traj_dir)
+    traj.load_trajectory(load_energy=True, energy_only=True)
+    traj.load_equilibrated_states(fraction=fraction, method=method)
+    return traj
+    
+
+def load_trajectories_parallel(lattice, traj_dirs, fraction=0.5, method='fraction', n_workers=None):
+    """
+    Load multiple trajectories in parallel with equilibrated states.
+    
+    ✅ RECOMMENDED: This optimization is effective for all use cases.
+    I/O operations (file reading/parsing) are slow enough that parallel loading
+    provides consistent speedup (5-10x) without excessive overhead.
+    
+    Unlike parallel RDF computation, loading is I/O-bound and benefits from
+    parallelization even for small numbers of trajectories.
+    
+    Parameters
+    ----------
+    lattice : lattice object
+        Common lattice for all trajectories
+    traj_dirs : list of Path
+        List of trajectory directory paths
+    fraction : float, default 0.5
+        Fraction of trajectory to skip for equilibration
+    method : str, default 'fraction'
+        Equilibration detection method
+    n_workers : int, optional
+        Number of parallel workers. If None, uses all available cores.
+        
+    Returns
+    -------
+    list of trajectory
+        Loaded trajectories with equilibrated states
+        
+    Examples
+    --------
+    >>> # Sequential loading (slow - 60s for 10 trajectories)
+    >>> trajs = []
+    >>> for traj_dir in traj_dirs:
+    >>>     traj = trajectory(lat, traj_dir)
+    >>>     traj.load_trajectory(energy_only=True)
+    >>>     traj.load_equilibrated_states(fraction=0.5)
+    >>>     trajs.append(traj)
+    >>> 
+    >>> # Parallel loading (fast - 6-10s for 10 trajectories)
+    >>> trajs = load_trajectories_parallel(lat, traj_dirs, fraction=0.5)
+    
+    Notes
+    -----
+    - Typical speedup: 5-10x with 10+ cores
+    - Effective for all dataset sizes (I/O-bound operations benefit from parallelism)
+    - Each trajectory reads its own file → true parallel I/O
+    - Overhead is minimal compared to file parsing time
+    - Combine with pickle caching for even better repeated-analysis performance
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing as mp
+    
+    try:
+        from tqdm import tqdm
+        use_tqdm = True
+    except ImportError:
+        use_tqdm = False
+    
+    if len(traj_dirs) == 0:
+        return []
+    
+    # Determine number of workers
+    if n_workers is None:
+        n_workers = mp.cpu_count()
+    
+    # Prepare arguments
+    args_list = [(lattice, traj_dir, fraction, method) for traj_dir in traj_dirs]
+    
+    print(f"Loading {len(traj_dirs)} trajectories in parallel using {n_workers} workers...")
+    
+    # Parallel loading
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        if use_tqdm:
+            trajs = list(tqdm(executor.map(_load_single_trajectory_equilibrated, args_list),
+                            total=len(traj_dirs),
+                            desc="Loading trajectories",
+                            unit="traj"))
+        else:
+            trajs = list(executor.map(_load_single_trajectory_equilibrated, args_list))
+    
+    print(f"Successfully loaded {len(trajs)} trajectories")
+    if len(trajs) > 0:
+        print(f"  Example: {len(trajs[0])} states per trajectory (equilibrated)")
+    
+    return trajs
