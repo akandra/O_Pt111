@@ -1553,6 +1553,9 @@ def load_trajectories_parallel(lattice, traj_dirs, fraction=0.5, method='fractio
     
     print(f"Successfully loaded {len(trajs)} trajectories")
     if len(trajs) > 0:
-        print(f"  Example: {len(trajs[0])} states per trajectory (equilibrated)")
+        if fraction < 1.0:
+            print(f"  Example: {len(trajs[0])} states per trajectory (equilibrated)")
+        else:
+            print(f"  Example: {len(trajs[0])} states per trajectory")
     
     return trajs
