@@ -18,9 +18,12 @@ This is a computational materials science project for kinetic Monte Carlo (KMC) 
    - Scripts in `aimd_scripts/`
 
 ### Key Components
-- **`nat_zarcos.py`**: Core data structures (`lattice` and `state` classes) for reading Zacros output
+- **`nat_zacros`** package (separate repository): Core data structures for reading Zacros output
+  - Repository: https://github.com/dauerba/nat_zacros
   - `lattice` class: Parses lattice geometry from `lattice_input.dat`/`lattice_output.txt`
   - `state` class: Loads adsorbate configurations from `history_output.txt`
+  - `trajectory` class: Manages state sequences and computes RDF with PBC
+  - Installation: `pip install git+https://github.com/dauerba/nat_zacros.git`
   
 - **`zacros_functions.py`** (1881 lines): Main analysis library with functions for:
   - RDF (radial distribution functions)
@@ -93,8 +96,22 @@ userpath = user_paths[username]
 - **Large files**: `history_output.txt` can be massive; read selectively using line ranges
 - **Data location**: Always check `user_paths` dictionary when scripts fail with path errors
 
+### Package Migration (2025-12-20)
+
+The `nat_zacros.py` module (1588 lines) was refactored into a separate package:
+- **Old location**: `O_Pt111/nat_zacros.py` (removed)
+- **New location**: Separate repository at `github.com/dauerba/nat_zacros`
+- **Import unchanged**: `from nat_zacros import lattice, state, trajectory`
+- **Installation**: Via pip from GitHub (see requirements.txt)
+
+**Rationale for separation:**
+- Independent versioning and releases
+- Easier sharing with collaborators
+- Better maintainability (separate modules vs 1588-line file)
+- Planned transfer to akandra for primary maintenance
+
 ## Key Files for Reference
-- [nat_zarcos.py](nat_zarcos.py): Start here for understanding data structures
+- [nat_zacros package](https://github.com/dauerba/nat_zacros): Core data structures (lattice, state, trajectory)
 - [zacros_functions.py](zacros_functions.py): Core analysis functions with docstrings
 - [test_class.ipynb](test_class.ipynb): Example usage of `lattice` and `state` classes
 - [submit_zacros_jobs.py](submit_zacros_jobs.py): Cluster energy parameters in `Constants` class
